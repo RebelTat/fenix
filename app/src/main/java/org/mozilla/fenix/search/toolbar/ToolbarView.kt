@@ -12,10 +12,15 @@ import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.content.ContextCompat
 import mozilla.components.browser.state.search.SearchEngine
 import mozilla.components.browser.toolbar.BrowserToolbar
+import mozilla.components.concept.toolbar.Toolbar
+import mozilla.components.feature.toolbar.ToolbarAutocompleteFeature
 import mozilla.components.support.ktx.android.content.getColorFromAttr
 import mozilla.components.support.ktx.android.content.res.resolveAttribute
 import mozilla.components.support.ktx.android.view.hideKeyboard
 import org.mozilla.fenix.R
+import org.mozilla.fenix.components.Components
+import org.mozilla.fenix.components.Core
+import org.mozilla.fenix.search.SearchEngineSource
 import org.mozilla.fenix.search.SearchFragmentState
 import org.mozilla.fenix.utils.Settings
 
@@ -23,7 +28,7 @@ import org.mozilla.fenix.utils.Settings
  * Interface for the Toolbar Interactor. This interface is implemented by objects that want
  * to respond to user interaction on the [ToolbarView].
  */
-interface ToolbarInteractor {
+interface ToolbarInteractor : SearchSelectorInteractor {
 
     /**
      * Called when a user hits the return key while [ToolbarView] has focus.
@@ -44,13 +49,6 @@ interface ToolbarInteractor {
      * @param text The current text displayed by [ToolbarView].
      */
     fun onTextChanged(text: String)
-
-    /**
-     * Called when an user taps on a search selector menu item.
-     *
-     * @param item The [SearchSelectorMenu.Item] that was tapped.
-     */
-    fun onMenuItemTapped(item: SearchSelectorMenu.Item)
 }
 
 /**
@@ -60,14 +58,22 @@ interface ToolbarInteractor {
 class ToolbarView(
     private val context: Context,
     private val settings: Settings,
+    private val components: Components,
     private val interactor: ToolbarInteractor,
     private val isPrivate: Boolean,
     val view: BrowserToolbar,
-    fromHomeFragment: Boolean
+    fromHomeFragment: Boolean,
 ) {
 
     @VisibleForTesting
     internal var isInitialized = false
+
+    @VisibleForTesting
+    internal val autocompleteFeature = ToolbarAutocompleteFeature(
+        toolbar = view,
+        engine = if (!isPrivate) components.core.engine else null,
+        shouldAutocomplete = { settings.shouldAutocompleteInAwesomebar },
+    )
 
     init {
         view.apply {
@@ -83,7 +89,8 @@ class ToolbarView(
             }
 
             background = AppCompatResources.getDrawable(
-                context, context.theme.resolveAttribute(R.attr.layer1)
+                context,
+                context.theme.resolveAttribute(R.attr.layer1),
             )
 
             edit.hint = context.getString(R.string.search_hint)
@@ -93,29 +100,31 @@ class ToolbarView(
                 hint = context.getColorFromAttr(R.attr.textSecondary),
                 suggestionBackground = ContextCompat.getColor(
                     context,
-                    R.color.suggestion_highlight_color
+                    R.color.suggestion_highlight_color,
                 ),
-                clear = context.getColorFromAttr(R.attr.textPrimary)
+                clear = context.getColorFromAttr(R.attr.textPrimary),
             )
 
             edit.setUrlBackground(
-                AppCompatResources.getDrawable(context, R.drawable.search_url_background)
+                AppCompatResources.getDrawable(context, R.drawable.search_url_background),
             )
 
             private = isPrivate
 
-            setOnEditListener(object : mozilla.components.concept.toolbar.Toolbar.OnEditListener {
-                override fun onCancelEditing(): Boolean {
-                    interactor.onEditingCanceled()
-                    // We need to return false to not show display mode
-                    return false
-                }
+            setOnEditListener(
+                object : mozilla.components.concept.toolbar.Toolbar.OnEditListener {
+                    override fun onCancelEditing(): Boolean {
+                        interactor.onEditingCanceled()
+                        // We need to return false to not show display mode
+                        return false
+                    }
 
-                override fun onTextChanged(text: String) {
-                    url = text
-                    interactor.onTextChanged(text)
-                }
-            })
+                    override fun onTextChanged(text: String) {
+                        url = text
+                        interactor.onTextChanged(text)
+                    }
+                },
+            )
         }
     }
 
@@ -138,17 +147,36 @@ class ToolbarView(
             // we have the most up to date text
             interactor.onTextChanged(view.url.toString())
 
-            view.editMode()
+            // If search terms are displayed, move the cursor to the end instead of selecting all text.
+            if (settings.showUnifiedSearchFeature && searchState.searchTerms.isNotBlank()) {
+                view.editMode(cursorPlacement = Toolbar.CursorPlacement.END)
+            } else {
+                view.editMode()
+            }
             isInitialized = true
         }
 
+        configureAutocomplete(searchState.searchEngineSource)
+
         val searchEngine = searchState.searchEngineSource.searchEngine
 
-        when (searchEngine?.type) {
+        view.edit.hint = when (searchEngine?.type) {
             SearchEngine.Type.APPLICATION ->
-                view.edit.hint = context.getString(R.string.application_search_hint)
+                when (searchEngine.id) {
+                    Core.HISTORY_SEARCH_ENGINE_ID -> context.getString(R.string.history_search_hint)
+                    Core.BOOKMARKS_SEARCH_ENGINE_ID -> context.getString(R.string.bookmark_search_hint)
+                    Core.TABS_SEARCH_ENGINE_ID -> context.getString(R.string.tab_search_hint)
+                    else -> context.getString(R.string.application_search_hint)
+                }
+            SearchEngine.Type.BUNDLED -> {
+                if (!searchEngine.isGeneral) {
+                    context.getString(R.string.application_search_hint)
+                } else {
+                    context.getString(R.string.search_hint)
+                }
+            }
             else ->
-                view.edit.hint = context.getString(R.string.search_hint)
+                context.getString(R.string.search_hint)
         }
 
         if (!settings.showUnifiedSearchFeature && searchEngine != null) {
@@ -159,12 +187,79 @@ class ToolbarView(
                 searchEngine.icon,
                 iconSize,
                 iconSize,
-                true
+                true,
             )
 
             val icon = BitmapDrawable(context.resources, scaledIcon)
 
             view.edit.setIcon(icon, searchEngine.name)
+        }
+    }
+
+    private fun configureAutocomplete(searchEngineSource: SearchEngineSource) {
+        when (settings.showUnifiedSearchFeature) {
+            true -> configureAutocompleteWithUnifiedSearch(searchEngineSource)
+            else -> configureAutocompleteWithoutUnifiedSearch(searchEngineSource)
+        }
+    }
+
+    private fun configureAutocompleteWithoutUnifiedSearch(searchEngineSource: SearchEngineSource) {
+        when (searchEngineSource) {
+            is SearchEngineSource.Default -> {
+                autocompleteFeature.updateAutocompleteProviders(
+                    listOfNotNull(
+                        when (settings.shouldShowHistorySuggestions) {
+                            true -> components.core.historyStorage
+                            false -> null
+                        },
+                        components.core.domainsAutocompleteProvider,
+                    ),
+                )
+            }
+            else -> {
+                autocompleteFeature.updateAutocompleteProviders(emptyList())
+            }
+        }
+    }
+
+    private fun configureAutocompleteWithUnifiedSearch(searchEngineSource: SearchEngineSource) {
+        when (searchEngineSource) {
+            is SearchEngineSource.Default -> {
+                autocompleteFeature.updateAutocompleteProviders(
+                    listOfNotNull(
+                        when (settings.shouldShowHistorySuggestions) {
+                            true -> components.core.historyStorage
+                            false -> null
+                        },
+                        components.core.domainsAutocompleteProvider,
+                    ),
+                )
+            }
+            is SearchEngineSource.Tabs -> {
+                autocompleteFeature.updateAutocompleteProviders(
+                    listOf(
+                        components.core.sessionAutocompleteProvider,
+                        components.backgroundServices.syncedTabsAutocompleteProvider,
+                    ),
+                )
+            }
+            is SearchEngineSource.Bookmarks -> {
+                autocompleteFeature.updateAutocompleteProviders(
+                    listOf(
+                        components.core.bookmarksStorage,
+                    ),
+                )
+            }
+            is SearchEngineSource.History -> {
+                autocompleteFeature.updateAutocompleteProviders(
+                    listOf(
+                        components.core.historyStorage,
+                    ),
+                )
+            }
+            else -> {
+                autocompleteFeature.updateAutocompleteProviders(emptyList())
+            }
         }
     }
 }

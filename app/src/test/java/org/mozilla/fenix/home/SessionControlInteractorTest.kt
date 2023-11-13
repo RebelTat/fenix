@@ -46,7 +46,7 @@ class SessionControlInteractorTest {
             recentSyncedTabController,
             recentBookmarksController,
             recentVisitsController,
-            pocketStoriesController
+            pocketStoriesController,
         )
     }
 
@@ -144,29 +144,10 @@ class SessionControlInteractorTest {
     }
 
     @Test
-    fun onCollectionMenuOpened() {
-        interactor.onCollectionMenuOpened()
-        verify { controller.handleMenuOpened() }
-    }
-
-    @Test
-    fun onTopSiteMenuOpened() {
-        interactor.onTopSiteMenuOpened()
-        verify { controller.handleMenuOpened() }
-    }
-
-    @Test
     fun onRecentTabClicked() {
         val tabId = "tabId"
         interactor.onRecentTabClicked(tabId)
         verify { recentTabController.handleRecentTabClicked(tabId) }
-    }
-
-    @Test
-    fun onRecentSearchGroupClicked() {
-        val tabId = "tabId"
-        interactor.onRecentSearchGroupClicked(tabId)
-        verify { recentTabController.handleRecentSearchGroupClicked(tabId) }
     }
 
     @Test
@@ -202,12 +183,6 @@ class SessionControlInteractorTest {
     fun `WHEN tapping on the customize home button THEN openCustomizeHomePage`() {
         interactor.openCustomizeHomePage()
         verify { controller.handleCustomizeHomeTapped() }
-    }
-
-    @Test
-    fun `WHEN calling showOnboardingDialog THEN handleShowOnboardingDialog`() {
-        interactor.showOnboardingDialog()
-        verify { controller.handleShowOnboardingDialog() }
     }
 
     @Test

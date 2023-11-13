@@ -5,17 +5,15 @@
 package org.mozilla.fenix.home.pocket
 
 import android.view.View
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.LifecycleOwner
 import androidx.recyclerview.widget.RecyclerView
@@ -23,9 +21,11 @@ import mozilla.components.lib.state.ext.observeAsComposableState
 import org.mozilla.fenix.R
 import org.mozilla.fenix.components.components
 import org.mozilla.fenix.compose.ComposeViewHolder
-import org.mozilla.fenix.compose.SectionHeader
+import org.mozilla.fenix.compose.SelectableChipColors
+import org.mozilla.fenix.compose.annotation.LightDarkPreview
+import org.mozilla.fenix.compose.home.HomeSectionHeader
 import org.mozilla.fenix.theme.FirefoxTheme
-import org.mozilla.fenix.theme.Theme
+import org.mozilla.fenix.wallpapers.WallpaperState
 
 internal const val POCKET_CATEGORIES_SELECTED_AT_A_TIME_COUNT = 8
 
@@ -40,7 +40,7 @@ internal const val POCKET_CATEGORIES_SELECTED_AT_A_TIME_COUNT = 8
 class PocketCategoriesViewHolder(
     composeView: ComposeView,
     viewLifecycleOwner: LifecycleOwner,
-    private val interactor: PocketStoriesInteractor
+    private val interactor: PocketStoriesInteractor,
 ) : ComposeViewHolder(composeView, viewLifecycleOwner) {
 
     @Composable
@@ -57,15 +57,42 @@ class PocketCategoriesViewHolder(
         val categoriesSelections = components.appStore
             .observeAsComposableState { state -> state.pocketStoriesCategoriesSelections }.value
 
+        val wallpaperState = components.appStore
+            .observeAsComposableState { state -> state.wallpaperState }.value ?: WallpaperState.default
+
+        var (selectedBackgroundColor, unselectedBackgroundColor, selectedTextColor, unselectedTextColor) =
+            SelectableChipColors.buildColors()
+        wallpaperState.composeRunIfWallpaperCardColorsAreAvailable { cardColorLight, cardColorDark ->
+            if (isSystemInDarkTheme()) {
+                selectedBackgroundColor = cardColorDark
+                unselectedBackgroundColor = cardColorLight
+                selectedTextColor = FirefoxTheme.colors.textActionPrimary
+                unselectedTextColor = FirefoxTheme.colors.textActionSecondary
+            } else {
+                selectedBackgroundColor = cardColorLight
+                unselectedBackgroundColor = cardColorDark
+                selectedTextColor = FirefoxTheme.colors.textActionSecondary
+                unselectedTextColor = FirefoxTheme.colors.textActionPrimary
+            }
+        }
+
+        val categoryColors = SelectableChipColors(
+            selectedTextColor = selectedTextColor,
+            unselectedTextColor = unselectedTextColor,
+            selectedBackgroundColor = selectedBackgroundColor,
+            unselectedBackgroundColor = unselectedBackgroundColor,
+        )
+
         // See the detailed comment in PocketStoriesViewHolder for reasoning behind this change.
         if (!homeScreenReady) return
         Column {
             Spacer(Modifier.height(24.dp))
 
             PocketTopics(
+                categoryColors = categoryColors,
                 categories = categories ?: emptyList(),
                 categoriesSelections = categoriesSelections ?: emptyList(),
-                onCategoryClick = interactor::onCategoryClicked
+                onCategoryClick = interactor::onCategoryClicked,
             )
         }
     }
@@ -79,14 +106,12 @@ class PocketCategoriesViewHolder(
 private fun PocketTopics(
     categories: List<PocketRecommendedStoriesCategory> = emptyList(),
     categoriesSelections: List<PocketRecommendedStoriesSelectedCategory> = emptyList(),
-    onCategoryClick: (PocketRecommendedStoriesCategory) -> Unit
+    categoryColors: SelectableChipColors = SelectableChipColors.buildColors(),
+    onCategoryClick: (PocketRecommendedStoriesCategory) -> Unit,
 ) {
     Column {
-        SectionHeader(
-            text = stringResource(R.string.pocket_stories_categories_header),
-            modifier = Modifier
-                .fillMaxWidth()
-                .wrapContentHeight(align = Alignment.Top)
+        HomeSectionHeader(
+            headerText = stringResource(R.string.pocket_stories_categories_header),
         )
 
         Spacer(Modifier.height(16.dp))
@@ -94,23 +119,23 @@ private fun PocketTopics(
         PocketStoriesCategories(
             categories = categories,
             selections = categoriesSelections,
+            modifier = Modifier.fillMaxWidth(),
+            categoryColors = categoryColors,
             onCategoryClick = onCategoryClick,
-            modifier = Modifier
-                .fillMaxWidth()
         )
     }
 }
 
 @Composable
-@Preview
+@LightDarkPreview
 private fun PocketCategoriesViewHolderPreview() {
-    FirefoxTheme(theme = Theme.getTheme(isPrivate = false)) {
+    FirefoxTheme {
         PocketTopics(
             categories = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor"
                 .split(" ")
                 .map { PocketRecommendedStoriesCategory(it) },
             categoriesSelections = emptyList(),
-            onCategoryClick = {}
+            onCategoryClick = {},
         )
     }
 }

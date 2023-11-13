@@ -3,8 +3,8 @@ trust-domain: mobile
 treeherder:
     group-names:
         'beta': 'Beta-related tasks with same APK configuration as Fennec'
-        'Btime': 'Raptor-Browsertime tests'
-        'bump': 'Bump dependencies'
+        'Btime': 'Raptor-Browsertime tests with Fission enabled'
+        'Btime-nofis': 'Raptor-Browsertime tests with Fission disabled'
         'debug': 'Builds made for testing'
         'Fetch': 'Fetch and store content'
         'forPerformanceTest': 'Builds made for Raptor and other performance tests'
@@ -40,17 +40,17 @@ workers:
             provisioner: 'mobile-{level}'
             implementation: docker-worker
             os: linux
-            worker-type: b-linux
+            worker-type: b-linux-gcp
         b-android-large:
             provisioner: 'mobile-{level}'
             implementation: docker-worker
             os: linux
-            worker-type: b-linux-large
+            worker-type: b-linux-large-gcp
         b-android-xlarge:
             provisioner: 'mobile-{level}'
             implementation: docker-worker
             os: linux
-            worker-type: b-linux-xlarge
+            worker-type: b-linux-xlarge-gcp
         beetmover:
             provisioner: scriptworker-k8s
             implementation: scriptworker-beetmover
@@ -71,13 +71,13 @@ workers:
             provisioner: 'mobile-{level}'
             implementation: docker-worker
             os: linux
-            worker-type: 'images'
+            worker-type: 'images-gcp'
         # misc is used by taskgraph to generate tasks with more than 10 routes
         misc:
             provisioner: 'mobile-{level}'
             implementation: docker-worker
             os: linux
-            worker-type: 'b-linux'
+            worker-type: 'b-linux-gcp'
         push-apk:
             provisioner: scriptworker-k8s
             implementation: scriptworker-pushapk
@@ -113,5 +113,7 @@ scriptworker:
 
 release-promotion:
     flavors:
+        promote:
+            target-tasks-method: promote
         ship:
-            target-tasks-method: release
+            target-tasks-method: ship

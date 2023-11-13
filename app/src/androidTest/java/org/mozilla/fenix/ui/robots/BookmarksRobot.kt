@@ -23,10 +23,8 @@ import androidx.test.espresso.matcher.ViewMatchers.withEffectiveVisibility
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.espresso.matcher.ViewMatchers.withParent
 import androidx.test.espresso.matcher.ViewMatchers.withText
-import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.By.res
-import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.UiSelector
 import androidx.test.uiautomator.Until
 import org.hamcrest.Matchers.allOf
@@ -36,6 +34,7 @@ import org.junit.Assert.assertFalse
 import org.mozilla.fenix.R
 import org.mozilla.fenix.helpers.TestAssetHelper
 import org.mozilla.fenix.helpers.TestAssetHelper.waitingTime
+import org.mozilla.fenix.helpers.TestHelper.mDevice
 import org.mozilla.fenix.helpers.TestHelper.packageName
 import org.mozilla.fenix.helpers.click
 import org.mozilla.fenix.helpers.ext.waitNotNull
@@ -47,7 +46,7 @@ class BookmarksRobot {
 
     fun verifyBookmarksMenuView() {
         mDevice.findObject(
-            UiSelector().text("Bookmarks")
+            UiSelector().text("Bookmarks"),
         ).waitForExists(waitingTime)
 
         assertBookmarksView()
@@ -84,7 +83,7 @@ class BookmarksRobot {
     fun verifySnackBarHidden() {
         mDevice.waitNotNull(
             Until.gone(By.text("UNDO")),
-            TestAssetHelper.waitingTime
+            TestAssetHelper.waitingTime,
         )
         onView(withId(R.id.snackbar_layout)).check(doesNotExist())
     }
@@ -116,15 +115,15 @@ class BookmarksRobot {
     fun verifyCurrentFolderTitle(title: String) {
         mDevice.findObject(
             UiSelector().resourceId("$packageName:id/navigationToolbar")
-                .textContains(title)
+                .textContains(title),
         )
             .waitForExists(waitingTime)
 
         onView(
             allOf(
                 withText(title),
-                withParent(withId(R.id.navigationToolbar))
-            )
+                withParent(withId(R.id.navigationToolbar)),
+            ),
         )
             .check(matches(isDisplayed()))
     }
@@ -132,15 +131,15 @@ class BookmarksRobot {
     fun waitForBookmarksFolderContentToExist(parentFolderName: String, childFolderName: String) {
         mDevice.findObject(
             UiSelector().resourceId("$packageName:id/navigationToolbar")
-                .textContains(parentFolderName)
+                .textContains(parentFolderName),
         )
             .waitForExists(waitingTime)
 
         mDevice.waitNotNull(Until.findObject(By.text(childFolderName)), waitingTime)
     }
 
-    fun verifySignInToSyncButton() =
-        signInToSyncButton().check(matches(withEffectiveVisibility(ViewMatchers.Visibility.VISIBLE)))
+    fun verifySyncSignInButton() =
+        syncSignInButton().check(matches(withEffectiveVisibility(ViewMatchers.Visibility.VISIBLE)))
 
     fun verifyDeleteFolderConfirmationMessage() = assertDeleteFolderConfirmationMessage()
 
@@ -151,16 +150,25 @@ class BookmarksRobot {
             .click()
     }
 
-    fun createFolder(name: String) {
+    fun createFolder(name: String, parent: String? = null) {
         clickAddFolderButton()
         addNewFolderName(name)
+        if (!parent.isNullOrBlank()) {
+            setParentFolder(parent)
+        }
         saveNewFolder()
+    }
+
+    fun setParentFolder(parentName: String) {
+        clickParentFolderSelector()
+        selectFolder(parentName)
+        navigateUp()
     }
 
     fun clickAddFolderButton() {
         mDevice.waitNotNull(
             Until.findObject(By.desc("Add folder")),
-            TestAssetHelper.waitingTime
+            TestAssetHelper.waitingTime,
         )
         addFolderButton().click()
     }
@@ -245,10 +253,17 @@ class BookmarksRobot {
         }
 
         fun clickSingInToSyncButton(interact: SettingsTurnOnSyncRobot.() -> Unit): SettingsTurnOnSyncRobot.Transition {
-            signInToSyncButton().click()
+            syncSignInButton().click()
 
             SettingsTurnOnSyncRobot().interact()
             return SettingsTurnOnSyncRobot.Transition()
+        }
+
+        fun goBack(interact: HomeScreenRobot.() -> Unit): HomeScreenRobot.Transition {
+            goBackButton().click()
+
+            HomeScreenRobot().interact()
+            return HomeScreenRobot.Transition()
         }
     }
 }
@@ -267,10 +282,10 @@ private fun bookmarkFavicon(url: String) = onView(
         withId(R.id.favicon),
         withParent(
             withParent(
-                withChild(allOf(withId(R.id.url), withText(url)))
-            )
-        )
-    )
+                withChild(allOf(withId(R.id.url), withText(url))),
+            ),
+        ),
+    ),
 )
 
 private fun bookmarkURL(url: String) = onView(allOf(withId(R.id.url), withText(containsString(url))))
@@ -284,15 +299,15 @@ private fun saveFolderButton() = onView(withId(R.id.confirm_add_folder_button))
 private fun threeDotMenu(bookmarkUrl: Uri) = onView(
     allOf(
         withId(R.id.overflow_menu),
-        withParent(withChild(allOf(withId(R.id.url), withText(bookmarkUrl.toString()))))
-    )
+        withParent(withChild(allOf(withId(R.id.url), withText(bookmarkUrl.toString())))),
+    ),
 )
 
 private fun threeDotMenu(bookmarkTitle: String) = onView(
     allOf(
         withId(R.id.overflow_menu),
-        withParent(withChild(allOf(withId(R.id.title), withText(bookmarkTitle))))
-    )
+        withParent(withChild(allOf(withId(R.id.title), withText(bookmarkTitle)))),
+    ),
 )
 
 private fun snackBarText() = onView(withId(R.id.snackbar_text))
@@ -309,14 +324,14 @@ private fun saveBookmarkButton() = onView(withId(R.id.save_bookmark_button))
 
 private fun deleteInEditModeButton() = onView(withId(R.id.delete_bookmark_button))
 
-private fun signInToSyncButton() = onView(withId(R.id.bookmark_folders_sign_in))
+private fun syncSignInButton() = onView(withId(R.id.bookmark_folders_sign_in))
 
 private fun assertBookmarksView() {
     onView(
         allOf(
             withText("Bookmarks"),
-            withParent(withId(R.id.navigationToolbar))
-        )
+            withParent(withId(R.id.navigationToolbar)),
+        ),
     )
         .check(matches(isDisplayed()))
 }
@@ -332,23 +347,23 @@ private fun assertEmptyBookmarksList() =
 private fun assertBookmarkFolderIsNotCreated(title: String) {
     mDevice.findObject(
         UiSelector()
-            .resourceId("$packageName:id/bookmarks_wrapper")
+            .resourceId("$packageName:id/bookmarks_wrapper"),
     ).waitForExists(waitingTime)
 
     assertFalse(
         mDevice.findObject(
             UiSelector()
-                .textContains(title)
-        ).waitForExists(waitingTime)
+                .textContains(title),
+        ).waitForExists(waitingTime),
     )
 }
 
 private fun assertBookmarkFavicon(forUrl: Uri) = bookmarkFavicon(forUrl.toString()).check(
     matches(
         withEffectiveVisibility(
-            ViewMatchers.Visibility.VISIBLE
-        )
-    )
+            ViewMatchers.Visibility.VISIBLE,
+        ),
+    ),
 )
 
 private fun assertBookmarkURL(expectedURL: String) =
@@ -363,15 +378,15 @@ private fun assertBookmarkTitle(expectedTitle: String) =
 private fun assertBookmarkIsDeleted(expectedTitle: String) {
     mDevice.findObject(
         UiSelector()
-            .resourceId("$packageName:id/bookmarks_wrapper")
+            .resourceId("$packageName:id/bookmarks_wrapper"),
     ).waitForExists(waitingTime)
 
     assertFalse(
         mDevice.findObject(
             UiSelector()
                 .resourceId("$packageName:id/title")
-                .textContains(expectedTitle)
-        ).waitForExists(waitingTime)
+                .textContains(expectedTitle),
+        ).waitForExists(waitingTime),
     )
 }
 private fun assertUndoDeleteSnackBarButton() =
@@ -398,9 +413,9 @@ private fun assertBookmarkURLEditBox() =
 private fun assertKeyboardVisibility(isExpectedToBeVisible: Boolean) =
     assertEquals(
         isExpectedToBeVisible,
-        UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+        mDevice
             .executeShellCommand("dumpsys input_method | grep mInputShown")
-            .contains("mInputShown=true")
+            .contains("mInputShown=true"),
     )
 
 private fun assertShareOverlay() =

@@ -60,7 +60,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.mozilla.fenix.GleanMetrics.Collections
 import org.mozilla.fenix.GleanMetrics.Events
-import org.mozilla.fenix.GleanMetrics.ExperimentsDefaultBrowser
 import org.mozilla.fenix.GleanMetrics.ReaderMode
 import org.mozilla.fenix.HomeActivity
 import org.mozilla.fenix.NavGraphDirections
@@ -84,25 +83,42 @@ class DefaultBrowserToolbarMenuControllerTest {
 
     @get:Rule
     val coroutinesTestRule = MainCoroutineRule()
+
     @get:Rule
     val gleanTestRule = GleanTestRule(testContext)
 
     @MockK private lateinit var swipeRefreshLayout: SwipeRefreshLayout
+
     @RelaxedMockK private lateinit var activity: HomeActivity
+
     @RelaxedMockK private lateinit var navController: NavController
+
     @RelaxedMockK private lateinit var openInFenixIntent: Intent
+
     @RelaxedMockK private lateinit var settings: Settings
+
     @RelaxedMockK private lateinit var searchUseCases: SearchUseCases
+
     @RelaxedMockK private lateinit var sessionUseCases: SessionUseCases
+
     @RelaxedMockK private lateinit var customTabUseCases: CustomTabsUseCases
+
     @RelaxedMockK private lateinit var browserAnimator: BrowserAnimator
+
     @RelaxedMockK private lateinit var snackbar: FenixSnackbar
+
     @RelaxedMockK private lateinit var tabCollectionStorage: TabCollectionStorage
+
     @RelaxedMockK private lateinit var topSitesUseCase: TopSitesUseCases
+
     @RelaxedMockK private lateinit var readerModeController: ReaderModeController
+
     @MockK private lateinit var sessionFeatureWrapper: ViewBoundFeatureWrapper<SessionFeature>
+
     @RelaxedMockK private lateinit var sessionFeature: SessionFeature
+
     @RelaxedMockK private lateinit var topSitesStorage: DefaultTopSitesStorage
+
     @RelaxedMockK private lateinit var pinnedSiteStorage: PinnedSiteStorage
 
     private lateinit var browserStore: BrowserStore
@@ -113,7 +129,7 @@ class DefaultBrowserToolbarMenuControllerTest {
         MockKAnnotations.init(this)
 
         mockkStatic(
-            "org.mozilla.fenix.settings.deletebrowsingdata.DeleteAndQuitKt"
+            "org.mozilla.fenix.settings.deletebrowsingdata.DeleteAndQuitKt",
         )
         every { deleteAndQuit(any(), any(), any()) } just Runs
 
@@ -137,8 +153,8 @@ class DefaultBrowserToolbarMenuControllerTest {
         browserStore = BrowserStore(
             initialState = BrowserState(
                 tabs = listOf(selectedTab),
-                selectedTabId = selectedTab.id
-            )
+                selectedTabId = selectedTab.id,
+            ),
         )
     }
 
@@ -157,19 +173,20 @@ class DefaultBrowserToolbarMenuControllerTest {
         val regularTab = createTab(
             url = expectedUrl,
             readerState = ReaderState(active = false, activeUrl = "https://1234.org"),
-            title = expectedTitle
+            title = expectedTitle,
         )
         val store =
             BrowserStore(BrowserState(tabs = listOf(regularTab), selectedTabId = regularTab.id))
 
         var bookmarkTappedInvoked = false
         val controller = createController(
-            scope = this, store = store,
+            scope = this,
+            store = store,
             bookmarkTapped = { url, title ->
                 assertEquals(expectedTitle, title)
                 assertEquals(expectedUrl, url)
                 bookmarkTappedInvoked = true
-            }
+            },
         )
         assertNull(Events.browserMenuAction.testGetValue())
 
@@ -191,19 +208,20 @@ class DefaultBrowserToolbarMenuControllerTest {
         val readerTab = createTab(
             url = readerUrl,
             readerState = ReaderState(active = true, activeUrl = "https://mozilla.org"),
-            title = expectedTitle
+            title = expectedTitle,
         )
         browserStore =
             BrowserStore(BrowserState(tabs = listOf(readerTab), selectedTabId = readerTab.id))
 
         var bookmarkTappedInvoked = false
         val controller = createController(
-            scope = this, store = browserStore,
+            scope = this,
+            store = browserStore,
             bookmarkTapped = { url, title ->
                 assertEquals(expectedTitle, title)
                 assertEquals(readerTab.readerState.activeUrl, url)
                 bookmarkTappedInvoked = true
-            }
+            },
         )
         assertNull(Events.browserMenuAction.testGetValue())
 
@@ -224,7 +242,7 @@ class DefaultBrowserToolbarMenuControllerTest {
         val controller = createController(
             scope = this,
             store = browserStore,
-            customTabSessionId = customTab.id
+            customTabSessionId = customTab.id,
         )
 
         val item = ToolbarMenu.Item.OpenInFenix
@@ -369,7 +387,7 @@ class DefaultBrowserToolbarMenuControllerTest {
         verify {
             sessionUseCases.reload(
                 selectedTab.id,
-                EngineSession.LoadUrlFlags.select(EngineSession.LoadUrlFlags.BYPASS_CACHE)
+                EngineSession.LoadUrlFlags.select(EngineSession.LoadUrlFlags.BYPASS_CACHE),
             )
         }
     }
@@ -466,7 +484,7 @@ class DefaultBrowserToolbarMenuControllerTest {
         verify {
             requestDesktopSiteUseCase.invoke(
                 true,
-                selectedTab.id
+                selectedTab.id,
             )
         }
     }
@@ -492,7 +510,7 @@ class DefaultBrowserToolbarMenuControllerTest {
         verify {
             requestDesktopSiteUseCase.invoke(
                 false,
-                selectedTab.id
+                selectedTab.id,
             )
         }
     }
@@ -587,7 +605,7 @@ class DefaultBrowserToolbarMenuControllerTest {
         val regularTab = createTab(
             url = url,
             readerState = ReaderState(active = false, activeUrl = "https://1234.org"),
-            title = title
+            title = title,
         )
         browserStore = BrowserStore(BrowserState(tabs = listOf(regularTab), selectedTabId = regularTab.id))
         val controller = createController(scope = this, store = browserStore)
@@ -604,10 +622,11 @@ class DefaultBrowserToolbarMenuControllerTest {
             navController.navigate(
                 directionsEq(
                     NavGraphDirections.actionGlobalShareFragment(
+                        sessionId = browserStore.state.selectedTabId,
                         data = arrayOf(ShareData(url = "https://mozilla.org", title = "Mozilla")),
-                        showPage = true
-                    )
-                )
+                        showPage = true,
+                    ),
+                ),
             )
         }
     }
@@ -620,7 +639,7 @@ class DefaultBrowserToolbarMenuControllerTest {
         val readerTab = createTab(
             url = readerUrl,
             readerState = ReaderState(active = true, activeUrl = "https://mozilla.org"),
-            title = title
+            title = title,
         )
         browserStore = BrowserStore(BrowserState(tabs = listOf(readerTab), selectedTabId = readerTab.id))
         val controller = createController(scope = this, store = browserStore)
@@ -637,10 +656,11 @@ class DefaultBrowserToolbarMenuControllerTest {
             navController.navigate(
                 directionsEq(
                     NavGraphDirections.actionGlobalShareFragment(
+                        sessionId = browserStore.state.selectedTabId,
                         data = arrayOf(ShareData(url = "https://mozilla.org", title = "Mozilla")),
-                        showPage = true
-                    )
-                )
+                        showPage = true,
+                    ),
+                ),
             )
         }
     }
@@ -651,10 +671,11 @@ class DefaultBrowserToolbarMenuControllerTest {
 
         var launcherInvoked = false
         val controller = createController(
-            scope = this, store = browserStore,
+            scope = this,
+            store = browserStore,
             findInPageLauncher = {
                 launcherInvoked = true
-            }
+            },
         )
         controller.handleToolbarItemInteraction(item)
 
@@ -685,13 +706,13 @@ class DefaultBrowserToolbarMenuControllerTest {
         assertTrue(eventExtra!!.containsKey("from_screen"))
         assertEquals(
             DefaultBrowserToolbarMenuController.TELEMETRY_BROWSER_IDENTIFIER,
-            eventExtra["from_screen"]
+            eventExtra["from_screen"],
         )
 
         val directions = BrowserFragmentDirections.actionGlobalCollectionCreationFragment(
             saveCollectionStep = SaveCollectionStep.SelectCollection,
             tabIds = arrayOf(selectedTab.id),
-            selectedTabIds = arrayOf(selectedTab.id)
+            selectedTabIds = arrayOf(selectedTab.id),
         )
         verify { navController.navigate(directionsEq(directions), null) }
     }
@@ -720,12 +741,12 @@ class DefaultBrowserToolbarMenuControllerTest {
         assertTrue(eventExtra!!.containsKey("from_screen"))
         assertEquals(
             DefaultBrowserToolbarMenuController.TELEMETRY_BROWSER_IDENTIFIER,
-            eventExtra["from_screen"]
+            eventExtra["from_screen"],
         )
         val directions = BrowserFragmentDirections.actionGlobalCollectionCreationFragment(
             saveCollectionStep = SaveCollectionStep.NameCollection,
             tabIds = arrayOf(selectedTab.id),
-            selectedTabIds = arrayOf(selectedTab.id)
+            selectedTabIds = arrayOf(selectedTab.id),
         )
         verify { navController.navigate(directionsEq(directions), null) }
     }
@@ -742,9 +763,9 @@ class DefaultBrowserToolbarMenuControllerTest {
             navController.navigate(
                 directionsEq(
                     NavGraphDirections.actionGlobalHome(
-                        focusOnAddressBar = true
-                    )
-                )
+                        focusOnAddressBar = true,
+                    ),
+                ),
             )
         }
     }
@@ -782,24 +803,6 @@ class DefaultBrowserToolbarMenuControllerTest {
         verify { navController.navigate(turnOnSyncDirections, null) }
     }
 
-    @Test
-    fun `GIVEN the default browser experiment WHEN SetDefaultBrowser menu item is pressed THEN proper metrics are recorded`() = runTest {
-        val item = ToolbarMenu.Item.SetDefaultBrowser
-
-        val store: BrowserStore = mockk()
-
-        val controller = createController(
-            scope = this, store = store,
-            bookmarkTapped = { _, _ -> }
-        )
-
-        assertNull(ExperimentsDefaultBrowser.toolbarMenuClicked.testGetValue())
-
-        controller.handleToolbarItemInteraction(item)
-
-        assertNotNull(ExperimentsDefaultBrowser.toolbarMenuClicked.testGetValue())
-    }
-
     @Suppress("LongParameterList")
     private fun createController(
         scope: CoroutineScope,
@@ -807,7 +810,7 @@ class DefaultBrowserToolbarMenuControllerTest {
         activity: HomeActivity = this.activity,
         customTabSessionId: String? = null,
         findInPageLauncher: () -> Unit = { },
-        bookmarkTapped: (String, String) -> Unit = { _, _ -> }
+        bookmarkTapped: (String, String) -> Unit = { _, _ -> },
     ) = DefaultBrowserToolbarMenuController(
         store = store,
         activity = activity,
@@ -825,7 +828,7 @@ class DefaultBrowserToolbarMenuControllerTest {
         sessionFeature = sessionFeatureWrapper,
         topSitesStorage = topSitesStorage,
         pinnedSiteStorage = pinnedSiteStorage,
-        browserStore = browserStore
+        browserStore = browserStore,
     ).apply {
         ioScope = scope
     }

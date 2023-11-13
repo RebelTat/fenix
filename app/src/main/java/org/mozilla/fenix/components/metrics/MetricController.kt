@@ -6,6 +6,7 @@ package org.mozilla.fenix.components.metrics
 
 import androidx.annotation.VisibleForTesting
 import mozilla.components.browser.menu.facts.BrowserMenuFacts
+import mozilla.components.browser.toolbar.facts.ToolbarFacts
 import mozilla.components.concept.awesomebar.AwesomeBar
 import mozilla.components.feature.autofill.facts.AutofillFacts
 import mozilla.components.feature.awesomebar.facts.AwesomeBarFacts
@@ -36,12 +37,13 @@ import mozilla.telemetry.glean.private.NoExtras
 import org.mozilla.fenix.BuildConfig
 import org.mozilla.fenix.GleanMetrics.Addons
 import org.mozilla.fenix.GleanMetrics.Addresses
-import org.mozilla.fenix.GleanMetrics.ContextMenu
 import org.mozilla.fenix.GleanMetrics.AndroidAutofill
 import org.mozilla.fenix.GleanMetrics.Awesomebar
 import org.mozilla.fenix.GleanMetrics.BrowserSearch
+import org.mozilla.fenix.GleanMetrics.ContextMenu
 import org.mozilla.fenix.GleanMetrics.ContextualMenu
 import org.mozilla.fenix.GleanMetrics.CreditCards
+import org.mozilla.fenix.GleanMetrics.Events
 import org.mozilla.fenix.GleanMetrics.LoginDialog
 import org.mozilla.fenix.GleanMetrics.MediaNotification
 import org.mozilla.fenix.GleanMetrics.MediaState
@@ -63,23 +65,25 @@ interface MetricController {
             services: List<MetricsService>,
             isDataTelemetryEnabled: () -> Boolean,
             isMarketingDataTelemetryEnabled: () -> Boolean,
-            settings: Settings
+            settings: Settings,
         ): MetricController {
             return if (BuildConfig.TELEMETRY) {
                 ReleaseMetricController(
                     services,
                     isDataTelemetryEnabled,
                     isMarketingDataTelemetryEnabled,
-                    settings
+                    settings,
                 )
-            } else DebugMetricController()
+            } else {
+                DebugMetricController()
+            }
         }
     }
 }
 
 @VisibleForTesting
 internal class DebugMetricController(
-    private val logger: Logger = Logger()
+    private val logger: Logger = Logger(),
 ) : MetricController {
 
     override fun start(type: MetricServiceType) {
@@ -101,16 +105,18 @@ internal class ReleaseMetricController(
     private val services: List<MetricsService>,
     private val isDataTelemetryEnabled: () -> Boolean,
     private val isMarketingDataTelemetryEnabled: () -> Boolean,
-    private val settings: Settings
+    private val settings: Settings,
 ) : MetricController {
     private var initialized = mutableSetOf<MetricServiceType>()
 
     init {
-        Facts.registerProcessor(object : FactProcessor {
-            override fun process(fact: Fact) {
-                fact.process()
-            }
-        })
+        Facts.registerProcessor(
+            object : FactProcessor {
+                override fun process(fact: Fact) {
+                    fact.process()
+                }
+            },
+        )
     }
 
     @VisibleForTesting
@@ -143,6 +149,9 @@ internal class ReleaseMetricController(
                 else -> Unit
             }
         }
+        Component.BROWSER_TOOLBAR to ToolbarFacts.Items.MENU -> {
+            Events.toolbarMenuVisible.record(NoExtras())
+        }
         Component.FEATURE_CONTEXTMENU to ContextMenuFacts.Items.ITEM -> {
             metadata?.get("item")?.let { item ->
                 contextMenuAllowList[item]?.let { extraKey ->
@@ -172,6 +181,8 @@ internal class ReleaseMetricController(
             CreditCards.savePromptCreate.record(NoExtras())
         Component.FEATURE_PROMPTS to CreditCardAutofillDialogFacts.Items.AUTOFILL_CREDIT_CARD_UPDATED ->
             CreditCards.savePromptUpdate.record(NoExtras())
+        Component.FEATURE_PROMPTS to CreditCardAutofillDialogFacts.Items.AUTOFILL_CREDIT_CARD_SAVE_PROMPT_SHOWN ->
+            CreditCards.savePromptShown.record(NoExtras())
 
         Component.FEATURE_PROMPTS to AddressAutofillDialogFacts.Items.AUTOFILL_ADDRESS_FORM_DETECTED ->
             Addresses.formDetected.record(NoExtras())
@@ -185,7 +196,8 @@ internal class ReleaseMetricController(
             Addresses.autofillPromptDismissed.record(NoExtras())
 
         Component.FEATURE_AUTOFILL to AutofillFacts.Items.AUTOFILL_REQUEST -> {
-            val hasMatchingLogins = metadata?.get(AutofillFacts.Metadata.HAS_MATCHING_LOGINS) as Boolean?
+            val hasMatchingLogins =
+                metadata?.get(AutofillFacts.Metadata.HAS_MATCHING_LOGINS) as Boolean?
             if (hasMatchingLogins == true) {
                 AndroidAutofill.requestMatchingLogins.record(NoExtras())
             } else {
@@ -234,11 +246,15 @@ internal class ReleaseMetricController(
         Component.FEATURE_AWESOMEBAR to AwesomeBarFacts.Items.OPENED_TAB_SUGGESTION_CLICKED -> {
             Awesomebar.openedTabSuggestionClicked.record(NoExtras())
         }
+        Component.FEATURE_AWESOMEBAR to AwesomeBarFacts.Items.SEARCH_TERM_SUGGESTION_CLICKED -> {
+            Awesomebar.searchTermSuggestionClicked.record(NoExtras())
+        }
         Component.FEATURE_CONTEXTMENU to ContextMenuFacts.Items.TEXT_SELECTION_OPTION -> {
             when (metadata?.get("textSelectionOption")?.toString()) {
                 CONTEXT_MENU_COPY -> ContextualMenu.copyTapped.record(NoExtras())
                 CONTEXT_MENU_SEARCH,
-                CONTEXT_MENU_SEARCH_PRIVATELY -> ContextualMenu.searchTapped.record(NoExtras())
+                CONTEXT_MENU_SEARCH_PRIVATELY,
+                -> ContextualMenu.searchTapped.record(NoExtras())
                 CONTEXT_MENU_SELECT_ALL -> ContextualMenu.selectAllTapped.record(NoExtras())
                 CONTEXT_MENU_SHARE -> ContextualMenu.shareTapped.record(NoExtras())
                 else -> Unit
@@ -254,6 +270,7 @@ internal class ReleaseMetricController(
 
         Component.FEATURE_SEARCH to AdsTelemetry.SERP_ADD_CLICKED -> {
             BrowserSearch.adClicks[value!!].add()
+            track(Event.GrowthData.SerpAdClicked)
         }
         Component.FEATURE_SEARCH to AdsTelemetry.SERP_SHOWN_WITH_ADDS -> {
             BrowserSearch.withAds[value!!].add()
@@ -278,22 +295,23 @@ internal class ReleaseMetricController(
             Unit
         }
         Component.COMPOSE_AWESOMEBAR to ComposeAwesomeBarFacts.Items.PROVIDER_DURATION -> {
-            metadata?.get(ComposeAwesomeBarFacts.MetadataKeys.DURATION_PAIR)?.let { providerTiming ->
-                require(providerTiming is Pair<*, *>) { "Expected providerTiming to be a Pair" }
-                when (val provider = providerTiming.first as AwesomeBar.SuggestionProvider) {
-                    is HistoryStorageSuggestionProvider -> PerfAwesomebar.historySuggestions
-                    is BookmarksStorageSuggestionProvider -> PerfAwesomebar.bookmarkSuggestions
-                    is SessionSuggestionProvider -> PerfAwesomebar.sessionSuggestions
-                    is SearchSuggestionProvider -> PerfAwesomebar.searchEngineSuggestions
-                    is ClipboardSuggestionProvider -> PerfAwesomebar.clipboardSuggestions
-                    is ShortcutsSuggestionProvider -> PerfAwesomebar.shortcutsSuggestions
-                    // NB: add PerfAwesomebar.syncedTabsSuggestions once we're using SyncedTabsSuggestionProvider
-                    else -> {
-                        Logger("Metrics").error("Unknown suggestion provider: $provider")
-                        null
-                    }
-                }?.accumulateSamples(listOf(providerTiming.second as Long))
-            }
+            metadata?.get(ComposeAwesomeBarFacts.MetadataKeys.DURATION_PAIR)
+                ?.let { providerTiming ->
+                    require(providerTiming is Pair<*, *>) { "Expected providerTiming to be a Pair" }
+                    when (val provider = providerTiming.first as AwesomeBar.SuggestionProvider) {
+                        is HistoryStorageSuggestionProvider -> PerfAwesomebar.historySuggestions
+                        is BookmarksStorageSuggestionProvider -> PerfAwesomebar.bookmarkSuggestions
+                        is SessionSuggestionProvider -> PerfAwesomebar.sessionSuggestions
+                        is SearchSuggestionProvider -> PerfAwesomebar.searchEngineSuggestions
+                        is ClipboardSuggestionProvider -> PerfAwesomebar.clipboardSuggestions
+                        is ShortcutsSuggestionProvider -> PerfAwesomebar.shortcutsSuggestions
+                        // NB: add PerfAwesomebar.syncedTabsSuggestions once we're using SyncedTabsSuggestionProvider
+                        else -> {
+                            Logger("Metrics").error("Unknown suggestion provider: $provider")
+                            null
+                        }
+                    }?.accumulateSamples(listOf(providerTiming.second as Long))
+                }
             Unit
         }
         Component.FEATURE_TOP_SITES to TopSitesFacts.Items.COUNT -> {
@@ -311,11 +329,23 @@ internal class ReleaseMetricController(
         }
         Component.FEATURE_SITEPERMISSIONS to SitePermissionsFacts.Items.PERMISSIONS -> {
             when (action) {
-                Action.DISPLAY -> SitePermissions.promptShown.record(SitePermissions.PromptShownExtra(value))
+                Action.DISPLAY -> SitePermissions.promptShown.record(
+                    SitePermissions.PromptShownExtra(
+                        value,
+                    ),
+                )
                 Action.CONFIRM ->
-                    SitePermissions.permissionsAllowed.record(SitePermissions.PermissionsAllowedExtra(value))
+                    SitePermissions.permissionsAllowed.record(
+                        SitePermissions.PermissionsAllowedExtra(
+                            value,
+                        ),
+                    )
                 Action.CANCEL ->
-                    SitePermissions.permissionsDenied.record(SitePermissions.PermissionsDeniedExtra(value))
+                    SitePermissions.permissionsDenied.record(
+                        SitePermissions.PermissionsDeniedExtra(
+                            value,
+                        ),
+                    )
                 else -> {
                     // no-op
                 }
@@ -397,7 +427,7 @@ internal class ReleaseMetricController(
             "mozac.feature.contextmenu.share_link" to "share_link",
             "mozac.feature.contextmenu.copy_link" to "copy_link",
             "mozac.feature.contextmenu.copy_image_location" to "copy_image_location",
-            "mozac.feature.contextmenu.share_image" to "share_image"
+            "mozac.feature.contextmenu.share_image" to "share_image",
         )
     }
 }

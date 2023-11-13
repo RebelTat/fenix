@@ -7,7 +7,7 @@ package org.mozilla.fenix.home
 import android.content.Context
 import android.view.View
 import androidx.annotation.VisibleForTesting
-import androidx.annotation.VisibleForTesting.PRIVATE
+import androidx.annotation.VisibleForTesting.Companion.PRIVATE
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
@@ -16,6 +16,7 @@ import mozilla.appservices.places.BookmarkRoot
 import mozilla.components.browser.menu.view.MenuButton
 import mozilla.components.service.glean.private.NoExtras
 import org.mozilla.fenix.BrowserDirection
+import org.mozilla.fenix.Config
 import org.mozilla.fenix.GleanMetrics.Events
 import org.mozilla.fenix.GleanMetrics.HomeScreen
 import org.mozilla.fenix.HomeActivity
@@ -63,21 +64,21 @@ class HomeMenuBuilder(
             context = context,
             onItemTapped = ::onItemTapped,
             onHighlightPresent = { menuButton.get()?.setHighlight(it) },
-            onMenuBuilderChanged = { menuButton.get()?.menuBuilder = it }
+            onMenuBuilderChanged = { menuButton.get()?.menuBuilder = it },
         )
 
         menuButton.get()?.setColorFilter(
             ContextCompat.getColor(
                 context,
-                ThemeManager.resolveAttribute(R.attr.textPrimary, context)
-            )
+                ThemeManager.resolveAttribute(R.attr.textPrimary, context),
+            ),
         )
     }
 
     /**
      * Callback invoked when a menu item is tapped on.
      */
-    @Suppress("LongMethod")
+    @Suppress("LongMethod", "ComplexMethod")
     @VisibleForTesting(otherwise = PRIVATE)
     internal fun onItemTapped(item: HomeMenu.Item) {
         if (item !is HomeMenu.Item.DesktopMode) {
@@ -90,7 +91,7 @@ class HomeMenuBuilder(
 
                 navController.nav(
                     R.id.homeFragment,
-                    HomeFragmentDirections.actionGlobalSettingsFragment()
+                    HomeFragmentDirections.actionGlobalSettingsFragment(),
                 )
             }
             HomeMenu.Item.CustomizeHome -> {
@@ -98,7 +99,7 @@ class HomeMenuBuilder(
 
                 navController.nav(
                     R.id.homeFragment,
-                    HomeFragmentDirections.actionGlobalHomeSettingsFragment()
+                    HomeFragmentDirections.actionGlobalHomeSettingsFragment(),
                 )
             }
             is HomeMenu.Item.SyncAccount -> {
@@ -111,35 +112,47 @@ class HomeMenuBuilder(
                             HomeFragmentDirections.actionGlobalAccountProblemFragment()
                         AccountState.NO_ACCOUNT ->
                             HomeFragmentDirections.actionGlobalTurnOnSync()
-                    }
+                    },
+                )
+            }
+            HomeMenu.Item.ManageAccountAndDevices -> {
+                homeActivity.openToBrowserAndLoad(
+                    searchTermOrURL =
+                    if (context.settings().allowDomesticChinaFxaServer) {
+                        mozilla.appservices.fxaclient.Config.Server.CHINA.contentUrl + "/settings"
+                    } else {
+                        mozilla.appservices.fxaclient.Config.Server.RELEASE.contentUrl + "/settings"
+                    },
+                    newTab = true,
+                    from = BrowserDirection.FromHome,
                 )
             }
             HomeMenu.Item.Bookmarks -> {
                 navController.nav(
                     R.id.homeFragment,
-                    HomeFragmentDirections.actionGlobalBookmarkFragment(BookmarkRoot.Mobile.id)
+                    HomeFragmentDirections.actionGlobalBookmarkFragment(BookmarkRoot.Mobile.id),
                 )
             }
             HomeMenu.Item.History -> {
                 navController.nav(
                     R.id.homeFragment,
-                    HomeFragmentDirections.actionGlobalHistoryFragment()
+                    HomeFragmentDirections.actionGlobalHistoryFragment(),
                 )
             }
             HomeMenu.Item.Downloads -> {
                 navController.nav(
                     R.id.homeFragment,
-                    HomeFragmentDirections.actionGlobalDownloadsFragment()
+                    HomeFragmentDirections.actionGlobalDownloadsFragment(),
                 )
             }
             HomeMenu.Item.Help -> {
                 homeActivity.openToBrowserAndLoad(
                     searchTermOrURL = SupportUtils.getSumoURLForTopic(
                         context = context,
-                        topic = SupportUtils.SumoTopic.HELP
+                        topic = SupportUtils.SumoTopic.HELP,
                     ),
                     newTab = true,
-                    from = BrowserDirection.FromHome
+                    from = BrowserDirection.FromHome,
                 )
             }
             HomeMenu.Item.WhatsNew -> {
@@ -149,7 +162,7 @@ class HomeMenuBuilder(
                 homeActivity.openToBrowserAndLoad(
                     searchTermOrURL = SupportUtils.getWhatsNewUrl(context),
                     newTab = true,
-                    from = BrowserDirection.FromHome
+                    from = BrowserDirection.FromHome,
                 )
             }
             HomeMenu.Item.Quit -> {
@@ -161,20 +174,20 @@ class HomeMenuBuilder(
                     coroutineScope = lifecycleOwner.lifecycleScope,
                     snackbar = FenixSnackbar.make(
                         view = view,
-                        isDisplayedWithBrowserToolbar = false
-                    )
+                        isDisplayedWithBrowserToolbar = false,
+                    ),
                 )
             }
             HomeMenu.Item.ReconnectSync -> {
                 navController.nav(
                     R.id.homeFragment,
-                    HomeFragmentDirections.actionGlobalAccountProblemFragment()
+                    HomeFragmentDirections.actionGlobalAccountProblemFragment(),
                 )
             }
             HomeMenu.Item.Extensions -> {
                 navController.nav(
                     R.id.homeFragment,
-                    HomeFragmentDirections.actionGlobalAddonsManagementFragment()
+                    HomeFragmentDirections.actionGlobalAddonsManagementFragment(),
                 )
             }
             is HomeMenu.Item.DesktopMode -> {

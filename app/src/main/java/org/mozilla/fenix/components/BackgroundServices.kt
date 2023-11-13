@@ -7,7 +7,7 @@ package org.mozilla.fenix.components
 import android.content.Context
 import android.os.Build
 import androidx.annotation.VisibleForTesting
-import androidx.annotation.VisibleForTesting.PRIVATE
+import androidx.annotation.VisibleForTesting.Companion.PRIVATE
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 import mozilla.components.browser.storage.sync.PlacesBookmarksStorage
@@ -21,6 +21,7 @@ import mozilla.components.concept.sync.DeviceType
 import mozilla.components.concept.sync.OAuthAccount
 import mozilla.components.feature.accounts.push.FxaPushSupportFeature
 import mozilla.components.feature.accounts.push.SendTabFeature
+import mozilla.components.feature.syncedtabs.SyncedTabsAutocompleteProvider
 import mozilla.components.feature.syncedtabs.storage.SyncedTabsStorage
 import mozilla.components.lib.crash.CrashReporter
 import mozilla.components.service.fxa.PeriodicSyncConfig
@@ -30,6 +31,8 @@ import mozilla.components.service.fxa.SyncEngine
 import mozilla.components.service.fxa.manager.FxaAccountManager
 import mozilla.components.service.fxa.manager.SCOPE_SESSION
 import mozilla.components.service.fxa.manager.SCOPE_SYNC
+import mozilla.components.service.fxa.store.SyncStore
+import mozilla.components.service.fxa.store.SyncStoreSupport
 import mozilla.components.service.fxa.sync.GlobalSyncableStoreProvider
 import mozilla.components.service.glean.private.NoExtras
 import mozilla.components.service.sync.autofill.AutofillCreditCardsAddressesStorage
@@ -44,7 +47,6 @@ import org.mozilla.fenix.ext.settings
 import org.mozilla.fenix.perf.StrictModeManager
 import org.mozilla.fenix.perf.lazyMonitored
 import org.mozilla.fenix.sync.SyncedTabsIntegration
-import org.mozilla.fenix.utils.Settings
 
 /**
  * Component group for background services. These are the components that need to be accessed from within a
@@ -60,7 +62,7 @@ class BackgroundServices(
     passwordsStorage: Lazy<SyncableLoginsStorage>,
     remoteTabsStorage: Lazy<RemoteTabsStorage>,
     creditCardsStorage: Lazy<AutofillCreditCardsAddressesStorage>,
-    strictMode: StrictModeManager
+    strictMode: StrictModeManager,
 ) {
     // Allows executing tasks which depend on the account manager, but do not need to eagerly initialize it.
     val accountManagerAvailableQueue = RunWhenReadyQueue()
@@ -70,7 +72,7 @@ class BackgroundServices(
             R.string.default_device_name_2,
             context.getString(R.string.app_name),
             Build.MANUFACTURER,
-            Build.MODEL
+            Build.MODEL,
         )
 
     val serverConfig = FxaServer.config(context)
@@ -86,7 +88,7 @@ class BackgroundServices(
         // Enable encryption for account state on supported API levels (23+).
         // Just on Nightly and local builds for now.
         // Enabling this for all channels is tracked in https://github.com/mozilla-mobile/fenix/issues/6704
-        secureStateAtRest = Config.channel.isNightlyOrDebug
+        secureStateAtRest = Config.channel.isNightlyOrDebug,
     )
 
     @VisibleForTesting
@@ -97,7 +99,7 @@ class BackgroundServices(
             SyncEngine.Passwords,
             SyncEngine.Tabs,
             SyncEngine.CreditCards,
-            if (FeatureFlags.syncAddressesFeature) SyncEngine.Addresses else null
+            if (FeatureFlags.syncAddressesFeature) SyncEngine.Addresses else null,
         )
     private val syncConfig =
         SyncConfig(supportedEngines, PeriodicSyncConfig(periodMinutes = 240)) // four hours
@@ -112,12 +114,12 @@ class BackgroundServices(
         GlobalSyncableStoreProvider.configureStore(SyncEngine.Bookmarks to bookmarkStorage)
         GlobalSyncableStoreProvider.configureStore(
             storePair = SyncEngine.Passwords to passwordsStorage,
-            keyProvider = lazy { passwordKeyProvider }
+            keyProvider = lazy { passwordKeyProvider },
         )
         GlobalSyncableStoreProvider.configureStore(SyncEngine.Tabs to remoteTabsStorage)
         GlobalSyncableStoreProvider.configureStore(
             storePair = SyncEngine.CreditCards to creditCardsStorage,
-            keyProvider = lazy { creditCardKeyProvider }
+            keyProvider = lazy { creditCardKeyProvider },
         )
         if (FeatureFlags.syncAddressesFeature) {
             GlobalSyncableStoreProvider.configureStore(SyncEngine.Addresses to creditCardsStorage)
@@ -125,10 +127,16 @@ class BackgroundServices(
     }
 
     private val telemetryAccountObserver = TelemetryAccountObserver(
-        context.settings(),
+        context,
     )
 
     val accountAbnormalities = AccountAbnormalities(context, crashReporter, strictMode)
+
+    val syncStore by lazyMonitored {
+        SyncStore()
+    }
+
+    private lateinit var syncStoreSupport: SyncStoreSupport
 
     val accountManager by lazyMonitored {
         makeAccountManager(context, serverConfig, deviceConfig, syncConfig, crashReporter)
@@ -137,6 +145,9 @@ class BackgroundServices(
     val syncedTabsStorage by lazyMonitored {
         SyncedTabsStorage(accountManager, context.components.core.store, remoteTabsStorage.value)
     }
+    val syncedTabsAutocompleteProvider by lazyMonitored {
+        SyncedTabsAutocompleteProvider(syncedTabsStorage)
+    }
 
     @VisibleForTesting(otherwise = PRIVATE)
     fun makeAccountManager(
@@ -144,7 +155,7 @@ class BackgroundServices(
         serverConfig: ServerConfig,
         deviceConfig: DeviceConfig,
         syncConfig: SyncConfig?,
-        crashReporter: CrashReporter?
+        crashReporter: CrashReporter?,
     ) = FxaAccountManager(
         context,
         serverConfig,
@@ -159,9 +170,9 @@ class BackgroundServices(
             SCOPE_SYNC,
             // Necessary to enable "Manage Account" functionality and ability to generate OAuth
             // codes for certain scopes.
-            SCOPE_SESSION
+            SCOPE_SESSION,
         ),
-        crashReporter
+        crashReporter,
     ).also { accountManager ->
         // Register a telemetry account observer to keep track of FxA auth metrics.
         accountManager.register(telemetryAccountObserver)
@@ -175,6 +186,7 @@ class BackgroundServices(
         // Enable push if it's configured.
         push.feature?.let { autoPushFeature ->
             FxaPushSupportFeature(context, accountManager, autoPushFeature, crashReporter)
+                .initialize()
         }
 
         SendTabFeature(accountManager) { device, tabs ->
@@ -182,6 +194,10 @@ class BackgroundServices(
         }
 
         SyncedTabsIntegration(context, accountManager).launch()
+
+        syncStoreSupport = SyncStoreSupport(syncStore, lazyOf(accountManager)).also {
+            it.initialize()
+        }
 
         MainScope().launch {
             accountManager.start()
@@ -197,7 +213,7 @@ class BackgroundServices(
 }
 
 private class AccountManagerReadyObserver(
-    private val accountManagerAvailableQueue: RunWhenReadyQueue
+    private val accountManagerAvailableQueue: RunWhenReadyQueue,
 ) : AccountObserver {
     override fun onReady(authenticatedAccount: OAuthAccount?) {
         accountManagerAvailableQueue.ready()
@@ -206,13 +222,16 @@ private class AccountManagerReadyObserver(
 
 @VisibleForTesting(otherwise = PRIVATE)
 internal class TelemetryAccountObserver(
-    private val settings: Settings,
+    private val context: Context,
 ) : AccountObserver {
     override fun onAuthenticated(account: OAuthAccount, authType: AuthType) {
-        settings.signedInFxaAccount = true
+        context.settings().signedInFxaAccount = true
         when (authType) {
             // User signed-in into an existing FxA account.
-            AuthType.Signin -> SyncAuth.signIn.record(NoExtras())
+            AuthType.Signin -> {
+                SyncAuth.signIn.record(NoExtras())
+                context.components.analytics.experiments.recordEvent("sync_auth.sign_in")
+            }
 
             // User created a new FxA account.
             AuthType.Signup -> SyncAuth.signUp.record(NoExtras())
@@ -232,7 +251,8 @@ internal class TelemetryAccountObserver(
             // User signed-in into an FxA account shared from another locally installed app using the reuse flow.
             AuthType.MigratedReuse,
             // Account restored from a hydrated state on disk (e.g. during startup).
-            AuthType.Existing -> {
+            AuthType.Existing,
+            -> {
                 // no-op, events not recorded in Glean
             }
         }
@@ -240,6 +260,6 @@ internal class TelemetryAccountObserver(
 
     override fun onLoggedOut() {
         SyncAuth.signOut.record(NoExtras())
-        settings.signedInFxaAccount = false
+        context.settings().signedInFxaAccount = false
     }
 }

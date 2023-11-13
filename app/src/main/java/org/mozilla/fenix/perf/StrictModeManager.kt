@@ -14,13 +14,13 @@ import android.os.Handler
 import android.os.Looper
 import android.os.StrictMode
 import androidx.annotation.VisibleForTesting
-import androidx.annotation.VisibleForTesting.PRIVATE
+import androidx.annotation.VisibleForTesting.Companion.PRIVATE
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
 import mozilla.components.support.ktx.android.os.resetAfter
+import mozilla.components.support.utils.ManufacturerCodes
 import org.mozilla.fenix.Config
 import org.mozilla.fenix.components.Components
-import org.mozilla.fenix.utils.ManufacturerCodes
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicLong
 
@@ -38,7 +38,7 @@ open class StrictModeManager(
     // Ideally, we'd pass in a more specific value but there is a circular dependency: StrictMode
     // is passed into Core but we'd need to pass in Core here. Instead, we take components and later
     // fetch the value we need from it.
-    private val components: Components
+    private val components: Components,
 ) {
 
     private val isEnabledByBuildConfig = config.channel.isDebug
@@ -168,13 +168,13 @@ open class StrictModeManager(
  * To add a new manufacturer to the list, log "Build.MANUFACTURER" from the device to get the
  * exact name of the manufacturer.
  */
-private val strictModeExceptionList = setOf(ManufacturerCodes.HUAWEI, ManufacturerCodes.ONE_PLUS)
+private fun isInStrictModeExceptionList() = ManufacturerCodes.isHuawei || ManufacturerCodes.isOnePlus
 
 private fun StrictMode.ThreadPolicy.Builder.penaltyDeathWithIgnores(): StrictMode.ThreadPolicy.Builder {
     // This workaround was added before we realized we can ignored based on violation contents
     // (see code below). This solution - blanket disabling StrictMode on some manufacturers - isn't
     // great so, if we have time, we should consider reimplementing these fixes using the methods below.
-    if (Build.MANUFACTURER in strictModeExceptionList) {
+    if (isInStrictModeExceptionList()) {
         return this
     }
 

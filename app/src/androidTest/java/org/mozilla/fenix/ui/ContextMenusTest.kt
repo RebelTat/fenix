@@ -9,7 +9,6 @@ import androidx.test.uiautomator.UiDevice
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Before
-import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
 import org.mozilla.fenix.customannotations.SmokeTest
@@ -37,11 +36,11 @@ import org.mozilla.fenix.ui.robots.navigationToolbar
  */
 
 class ContextMenusTest {
-    private val mDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+    private lateinit var mDevice: UiDevice
     private lateinit var mockWebServer: MockWebServer
 
     @get:Rule
-    val activityIntentTestRule = HomeActivityIntentTestRule()
+    val activityIntentTestRule = HomeActivityIntentTestRule.withDefaultSettingsOverrides()
 
     @Rule
     @JvmField
@@ -50,6 +49,7 @@ class ContextMenusTest {
     @Before
     fun setUp() {
         activityIntentTestRule.activity.applicationContext.settings().shouldShowJumpBackInCFR = false
+        mDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
         mockWebServer = MockWebServer().apply {
             dispatcher = AndroidAssetDispatcher()
             start()
@@ -72,7 +72,7 @@ class ContextMenusTest {
         navigationToolbar {
         }.enterURLAndEnterToBrowser(pageLinks.url) {
             mDevice.waitForIdle()
-            longClickMatchingText("Link 1")
+            longClickLink("Link 1")
             verifyLinkContextMenuItems(genericURL.url)
             clickContextOpenLinkInNewTab()
             verifySnackBarText("New tab opened")
@@ -96,7 +96,7 @@ class ContextMenusTest {
         navigationToolbar {
         }.enterURLAndEnterToBrowser(pageLinks.url) {
             mDevice.waitForIdle()
-            longClickMatchingText("Link 2")
+            longClickLink("Link 2")
             verifyLinkContextMenuItems(genericURL.url)
             clickContextOpenLinkInPrivateTab()
             verifySnackBarText("New private tab opened")
@@ -118,6 +118,23 @@ class ContextMenusTest {
         navigationToolbar {
         }.enterURLAndEnterToBrowser(pageLinks.url) {
             mDevice.waitForIdle()
+            longClickLink("Link 3")
+            verifyLinkContextMenuItems(genericURL.url)
+            clickContextCopyLink()
+            verifySnackBarText("Link copied to clipboard")
+        }.openNavigationToolbar {
+        }.visitLinkFromClipboard {
+            verifyUrl(genericURL.url.toString())
+        }
+    }
+
+    @Test
+    fun verifyContextCopyLinkNotDisplayedAfterApplied() {
+        val pageLinks = TestAssetHelper.getGenericAsset(mockWebServer, 4)
+        val genericURL = TestAssetHelper.getGenericAsset(mockWebServer, 3)
+
+        navigationToolbar {
+        }.enterURLAndEnterToBrowser(pageLinks.url) {
             longClickMatchingText("Link 3")
             verifyLinkContextMenuItems(genericURL.url)
             clickContextCopyLink()
@@ -125,6 +142,11 @@ class ContextMenusTest {
         }.openNavigationToolbar {
         }.visitLinkFromClipboard {
             verifyUrl(genericURL.url.toString())
+        }.openTabDrawer {
+        }.openNewTab {
+        }
+        navigationToolbar {
+            verifyClipboardSuggestionsAreDisplayed(shouldBeDisplayed = false)
         }
     }
 
@@ -138,7 +160,7 @@ class ContextMenusTest {
         navigationToolbar {
         }.enterURLAndEnterToBrowser(pageLinks.url) {
             mDevice.waitForIdle()
-            longClickMatchingText("Link 1")
+            longClickLink("Link 1")
             verifyLinkContextMenuItems(genericURL.url)
             clickContextShareLink(genericURL.url) // verify share intent is matched with associated URL
         }
@@ -154,7 +176,7 @@ class ContextMenusTest {
         navigationToolbar {
         }.enterURLAndEnterToBrowser(pageLinks.url) {
             mDevice.waitForIdle()
-            longClickMatchingText("test_link_image")
+            longClickLink("test_link_image")
             verifyLinkImageContextMenuItems(imageResource.url)
             clickContextOpenImageNewTab()
             verifySnackBarText("New tab opened")
@@ -173,7 +195,7 @@ class ContextMenusTest {
         navigationToolbar {
         }.enterURLAndEnterToBrowser(pageLinks.url) {
             mDevice.waitForIdle()
-            longClickMatchingText("test_link_image")
+            longClickLink("test_link_image")
             verifyLinkImageContextMenuItems(imageResource.url)
             clickContextCopyImageLocation()
             verifySnackBarText("Link copied to clipboard")
@@ -193,7 +215,7 @@ class ContextMenusTest {
         navigationToolbar {
         }.enterURLAndEnterToBrowser(pageLinks.url) {
             mDevice.waitForIdle()
-            longClickMatchingText("test_link_image")
+            longClickLink("test_link_image")
             verifyLinkImageContextMenuItems(imageResource.url)
             clickContextSaveImage()
         }
@@ -206,7 +228,6 @@ class ContextMenusTest {
         }
     }
 
-    @Ignore("Failing with frequent ANR: https://bugzilla.mozilla.org/show_bug.cgi?id=1764605")
     @Test
     fun verifyContextMixedVariations() {
         val pageLinks =
@@ -219,13 +240,13 @@ class ContextMenusTest {
         navigationToolbar {
         }.enterURLAndEnterToBrowser(pageLinks.url) {
             mDevice.waitForIdle()
-            longClickMatchingText("Link 1")
+            longClickLink("Link 1")
             verifyLinkContextMenuItems(genericURL.url)
             dismissContentContextMenu(genericURL.url)
-            longClickMatchingText("test_link_image")
+            longClickLink("test_link_image")
             verifyLinkImageContextMenuItems(imageResource.url)
             dismissContentContextMenu(imageResource.url)
-            longClickMatchingText("test_no_link_image")
+            longClickLink("test_no_link_image")
             verifyNoLinkImageContextMenuItems(imageResource.url)
         }
     }
@@ -237,13 +258,12 @@ class ContextMenusTest {
 
         navigationToolbar {
         }.enterURLAndEnterToBrowser(genericURL.url) {
-            longClickMatchingText(genericURL.content)
+            longClickLink(genericURL.content)
         }.clickShareSelectedText {
             verifyAndroidShareLayout()
         }
     }
 
-    @Ignore("Failing, see: https://github.com/mozilla-mobile/fenix/issues/24457")
     @SmokeTest
     @Test
     fun selectAndSearchTextTest() {

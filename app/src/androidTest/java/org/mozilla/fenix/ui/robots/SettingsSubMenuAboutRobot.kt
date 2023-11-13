@@ -21,9 +21,9 @@ import androidx.test.espresso.matcher.ViewMatchers.withEffectiveVisibility
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.platform.app.InstrumentationRegistry
-import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.UiScrollable
 import androidx.test.uiautomator.UiSelector
+import mozilla.components.support.utils.ext.getPackageInfoCompat
 import org.hamcrest.CoreMatchers.allOf
 import org.hamcrest.CoreMatchers.containsString
 import org.junit.Assert.assertTrue
@@ -33,6 +33,7 @@ import org.mozilla.fenix.helpers.Constants.LISTS_MAXSWIPES
 import org.mozilla.fenix.helpers.TestAssetHelper.waitingTime
 import org.mozilla.fenix.helpers.TestHelper
 import org.mozilla.fenix.helpers.TestHelper.appName
+import org.mozilla.fenix.helpers.TestHelper.mDevice
 import org.mozilla.fenix.helpers.TestHelper.packageName
 import org.mozilla.fenix.settings.SupportUtils
 import java.text.SimpleDateFormat
@@ -50,8 +51,6 @@ class SettingsSubMenuAboutRobot {
     fun verifyAboutFirefoxPreview() = assertFirefoxPreviewPage()
 
     class Transition {
-        val mDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
-
         fun goBack(interact: SettingsRobot.() -> Unit): SettingsRobot.Transition {
             goBackButton().perform(click())
 
@@ -92,14 +91,14 @@ private fun assertAboutToolbar() =
     onView(
         allOf(
             withId(R.id.navigationToolbar),
-            hasDescendant(withText("About $appName"))
-        )
+            hasDescendant(withText("About $appName")),
+        ),
     ).check(matches(withEffectiveVisibility(ViewMatchers.Visibility.VISIBLE)))
 
 private fun assertVersionNumber() {
     val context = InstrumentationRegistry.getInstrumentation().targetContext
 
-    val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+    val packageInfo = context.packageManager.getPackageInfoCompat(context.packageName, 0)
     val versionCode = PackageInfoCompat.getLongVersionCode(packageInfo).toString()
 
     val buildNVersion = "${packageInfo.versionName} (Build #$versionCode)\n"
@@ -148,7 +147,7 @@ private fun assertSupport() {
     TestHelper.verifyUrl(
         "support.mozilla.org",
         "org.mozilla.fenix.debug:id/mozac_browser_toolbar_url_view",
-        R.id.mozac_browser_toolbar_url_view
+        R.id.mozac_browser_toolbar_url_view,
     )
 }
 
@@ -166,8 +165,8 @@ private fun assertCrashes() {
 
     assertTrue(
         mDevice.findObject(
-            UiSelector().textContains("No crash reports have been submitted.")
-        ).waitForExists(waitingTime)
+            UiSelector().textContains("No crash reports have been submitted."),
+        ).waitForExists(waitingTime),
     )
 
     for (i in 1..3) {
@@ -185,7 +184,7 @@ private fun assertPrivacyNotice() {
     TestHelper.verifyUrl(
         "/privacy/firefox",
         "org.mozilla.fenix.debug:id/mozac_browser_toolbar_url_view",
-        R.id.mozac_browser_toolbar_url_view
+        R.id.mozac_browser_toolbar_url_view,
     )
 }
 
@@ -199,7 +198,7 @@ private fun assertKnowYourRights() {
     TestHelper.verifyUrl(
         SupportUtils.SumoTopic.YOUR_RIGHTS.topicStr,
         "org.mozilla.fenix.debug:id/mozac_browser_toolbar_url_view",
-        R.id.mozac_browser_toolbar_url_view
+        R.id.mozac_browser_toolbar_url_view,
     )
 }
 
@@ -213,7 +212,7 @@ private fun assertLicensingInformation() {
     TestHelper.verifyUrl(
         "about:license",
         "org.mozilla.fenix.debug:id/mozac_browser_toolbar_url_view",
-        R.id.mozac_browser_toolbar_url_view
+        R.id.mozac_browser_toolbar_url_view,
     )
 }
 
@@ -240,6 +239,7 @@ class BuildDateAssertion {
     companion object {
         // this pattern represents the following date format: "Monday 12/30 @ 6:49 PM"
         private const val DATE_PATTERN = "EEEE M/d @ h:m a"
+
         //
         private const val NUM_OF_HOURS = 1
 
@@ -289,7 +289,7 @@ class BuildDateAssertion {
             val maxDate = calendar.time
             calendar.add(
                 Calendar.HOUR_OF_DAY,
-                hours * -2
+                hours * -2,
             ) // Gets the minDate by subtracting from maxDate
             val minDate = calendar.time
             return updatedDate.after(minDate) && updatedDate.before(maxDate)
@@ -297,7 +297,7 @@ class BuildDateAssertion {
 
         private fun LocalDateTime.isWithinRangeOf(
             hours: Int,
-            baselineDate: LocalDateTime
+            baselineDate: LocalDateTime,
         ): Boolean {
             val upperBound = baselineDate.plusHours(hours.toLong())
             val lowerBound = baselineDate.minusHours(hours.toLong())

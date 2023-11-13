@@ -12,15 +12,12 @@ import mozilla.components.browser.state.selector.getNormalOrPrivateTabs
 import mozilla.components.browser.state.selector.normalTabs
 import mozilla.components.browser.state.state.TabSessionState
 import mozilla.components.browser.state.store.BrowserStore
-import mozilla.components.browser.storage.sync.Tab as SyncTab
 import mozilla.components.concept.engine.prompt.ShareData
 import mozilla.components.service.fxa.manager.FxaAccountManager
 import mozilla.components.service.glean.private.NoExtras
-import org.mozilla.fenix.BrowserDirection
 import org.mozilla.fenix.GleanMetrics.Collections
 import org.mozilla.fenix.GleanMetrics.Events
 import org.mozilla.fenix.GleanMetrics.TabsTray
-import org.mozilla.fenix.HomeActivity
 import org.mozilla.fenix.collections.CollectionsDialog
 import org.mozilla.fenix.collections.show
 import org.mozilla.fenix.components.TabCollectionStorage
@@ -85,11 +82,6 @@ interface NavigationInteractor {
      * Used when adding [TabSessionState]s as bookmarks.
      */
     fun onSaveToBookmarks(tabs: Collection<TabSessionState>)
-
-    /**
-     * Called when clicking on a SyncedTab item.
-     */
-    fun onSyncedTabClicked(tab: SyncTab)
 }
 
 /**
@@ -98,7 +90,6 @@ interface NavigationInteractor {
 @Suppress("LongParameterList", "TooManyFunctions")
 class DefaultNavigationInteractor(
     private val context: Context,
-    private val activity: HomeActivity,
     private val browserStore: BrowserStore,
     private val navController: NavController,
     private val dismissTabTray: () -> Unit,
@@ -113,7 +104,7 @@ class DefaultNavigationInteractor(
     private val showBookmarkSnackbar: (tabSize: Int) -> Unit,
     private val showCancelledDownloadWarning: (downloadCount: Int, tabId: String?, source: String?) -> Unit,
     private val accountManager: FxaAccountManager,
-    private val ioDispatcher: CoroutineContext
+    private val ioDispatcher: CoroutineContext,
 ) : NavigationInteractor {
 
     override fun onTabTrayDismissed() {
@@ -134,13 +125,13 @@ class DefaultNavigationInteractor(
 
     override fun onTabSettingsClicked() {
         navController.navigate(
-            TabsTrayFragmentDirections.actionGlobalTabSettingsFragment()
+            TabsTrayFragmentDirections.actionGlobalTabSettingsFragment(),
         )
     }
 
     override fun onOpenRecentlyClosedClicked() {
         navController.navigate(
-            TabsTrayFragmentDirections.actionGlobalRecentlyClosed()
+            TabsTrayFragmentDirections.actionGlobalRecentlyClosed(),
         )
         Events.recentlyClosedTabsOpened.record(NoExtras())
     }
@@ -152,7 +143,7 @@ class DefaultNavigationInteractor(
             ShareData(url = it.content.url, title = it.content.title)
         }
         val directions = TabsTrayFragmentDirections.actionGlobalShareFragment(
-            data = data.toTypedArray()
+            data = data.toTypedArray(),
         )
         navController.navigate(directions)
     }
@@ -163,7 +154,7 @@ class DefaultNavigationInteractor(
             ShareData(url = it.content.url, title = it.content.title)
         }
         val directions = TabsTrayFragmentDirections.actionGlobalShareFragment(
-            data = data.toTypedArray()
+            data = data.toTypedArray(),
         )
         navController.navigate(directions)
     }
@@ -211,22 +202,22 @@ class DefaultNavigationInteractor(
                     Collections.saved.record(
                         Collections.SavedExtra(
                             browserStore.state.normalTabs.size.toString(),
-                            tabs.size.toString()
-                        )
+                            tabs.size.toString(),
+                        ),
                     )
                 } else {
                     Collections.tabsAdded.record(
                         Collections.TabsAddedExtra(
                             browserStore.state.normalTabs.size.toString(),
-                            tabs.size.toString()
-                        )
+                            tabs.size.toString(),
+                        ),
                     )
                 }
                 id?.apply {
                     showCollectionSnackbar(tabs.size, isNewCollection)
                 }
             },
-            onNegativeButtonClick = {}
+            onNegativeButtonClick = {},
         ).show(context)
     }
 
@@ -243,16 +234,5 @@ class DefaultNavigationInteractor(
         }
 
         showBookmarkSnackbar(tabs.size)
-    }
-
-    override fun onSyncedTabClicked(tab: SyncTab) {
-        Events.syncedTabOpened.record(NoExtras())
-
-        dismissTabTray()
-        activity.openToBrowserAndLoad(
-            searchTermOrURL = tab.active().url,
-            newTab = true,
-            from = BrowserDirection.FromTabsTray
-        )
     }
 }

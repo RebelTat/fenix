@@ -5,17 +5,19 @@
 package org.mozilla.fenix.ui
 
 import androidx.core.net.toUri
-import androidx.test.platform.app.InstrumentationRegistry
-import androidx.test.uiautomator.UiDevice
+import mozilla.components.concept.engine.utils.EngineReleaseChannel
 import org.junit.After
 import org.junit.Before
 import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
 import org.mozilla.fenix.customannotations.SmokeTest
-import org.mozilla.fenix.helpers.FeatureSettingsHelper
+import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.helpers.HomeActivityIntentTestRule
-import org.mozilla.fenix.helpers.TestHelper.deleteDownloadFromStorage
+import org.mozilla.fenix.helpers.TestHelper.assertExternalAppOpens
+import org.mozilla.fenix.helpers.TestHelper.deleteDownloadedFileOnStorage
+import org.mozilla.fenix.helpers.TestHelper.mDevice
+import org.mozilla.fenix.helpers.TestHelper.runWithCondition
 import org.mozilla.fenix.ui.robots.browserScreen
 import org.mozilla.fenix.ui.robots.downloadRobot
 import org.mozilla.fenix.ui.robots.navigationToolbar
@@ -30,21 +32,18 @@ import org.mozilla.fenix.ui.robots.notificationShade
  *  - Verifies managing downloads inside the Downloads listing.
  **/
 class DownloadTest {
-    private val mDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
-    private val featureSettingsHelper = FeatureSettingsHelper()
     /* Remote test page managed by Mozilla Mobile QA team at https://github.com/mozilla-mobile/testapp */
     private val downloadTestPage = "https://storage.googleapis.com/mobile_test_assets/test_app/downloads.html"
     private var downloadFile: String = ""
+    private val pdfFileName = "washington.pdf"
+    private val pdfFileURL = "storage.googleapis.com/mobile_test_assets/public/washington.pdf"
+    private val pdfFileContent = "Washington Crossing the Delaware"
 
     @get:Rule
-    val activityTestRule = HomeActivityIntentTestRule()
+    val activityTestRule = HomeActivityIntentTestRule.withDefaultSettingsOverrides()
 
     @Before
     fun setUp() {
-        // disabling the jump-back-in pop-up that interferes with the tests.
-        featureSettingsHelper.setJumpBackCFREnabled(false)
-        // disabling the PWA CFR on 3rd visit
-        featureSettingsHelper.disablePwaCFR(true)
         // clear all existing notifications
         notificationShade {
             mDevice.openNotification()
@@ -54,7 +53,6 @@ class DownloadTest {
 
     @After
     fun tearDown() {
-        featureSettingsHelper.resetAllFeatureFlags()
         notificationShade {
             cancelAllShownNotifications()
         }
@@ -105,14 +103,13 @@ class DownloadTest {
             verifyDownloadPrompt(downloadFile)
         }.clickDownload {
             verifyDownloadNotificationPopup()
-        }.closePrompt { }
+        }
         mDevice.openNotification()
         notificationShade {
             verifySystemNotificationExists("Download completed")
         }
     }
 
-    @Ignore("Intermittent: https://github.com/mozilla-mobile/fenix/issues/23434")
     @SmokeTest
     @Test
     fun pauseResumeCancelDownloadTest() {
@@ -140,16 +137,16 @@ class DownloadTest {
         }
     }
 
-    @Ignore("Failing, see: https://github.com/mozilla-mobile/fenix/issues/17485")
-    @SmokeTest
-    @Test
-        /* Verifies downloads in the Downloads Menu:
+    /* Verifies downloads in the Downloads Menu:
           - downloads appear in the list
           - deleting a download from device storage, removes it from the Downloads Menu too
-        */
+    */
+    @SmokeTest
+    @Test
     fun manageDownloadsInDownloadsMenuTest() {
         // a long filename to verify it's correctly displayed on the prompt and in the Downloads menu
-        downloadFile = "tAJwqaWjJsXS8AhzSninBMCfIZbHBGgcc001lx5DIdDwIcfEgQ6vE5Gb5VgAled17DFZ2A7ZDOHA0NpQPHXXFt.svg"
+        downloadFile =
+            "tAJwqaWjJsXS8AhzSninBMCfIZbHBGgcc001lx5DIdDwIcfEgQ6vE5Gb5VgAled17DFZ2A7ZDOHA0NpQPHXXFt.svg"
 
         navigationToolbar {
         }.enterURLAndEnterToBrowser(downloadTestPage.toUri()) {
@@ -165,14 +162,76 @@ class DownloadTest {
             waitForDownloadsListToExist()
             verifyDownloadedFileName(downloadFile)
             verifyDownloadedFileIcon()
-            openDownloadedFile(downloadFile)
-            verifyPhotosAppOpens()
-            deleteDownloadFromStorage()
-            waitForDownloadsListToExist()
+            deleteDownloadedFileOnStorage(downloadFile)
         }.exitDownloadsManagerToBrowser {
         }.openThreeDotMenu {
         }.openDownloadsManager {
             verifyEmptyDownloadsList()
+        }
+    }
+
+    @SmokeTest
+    @Test
+    fun openDownloadedFileTest() {
+        downloadFile = "web_icon.png"
+
+        navigationToolbar {
+        }.enterURLAndEnterToBrowser(downloadTestPage.toUri()) {
+            waitForPageToLoad()
+        }.clickDownloadLink(downloadFile) {
+            verifyDownloadPrompt(downloadFile)
+        }.clickDownload {
+            verifyDownloadNotificationPopup()
+        }
+        browserScreen {
+        }.openThreeDotMenu {
+        }.openDownloadsManager {
+            verifyDownloadedFileName(downloadFile)
+            openDownloadedFile(downloadFile)
+            verifyPhotosAppOpens()
+            mDevice.pressBack()
+        }
+    }
+
+    @SmokeTest
+    @Test
+    fun openPDFInBrowserTest() {
+        runWithCondition(
+            // Returns the GeckoView channel set for the current version, if a feature is limited to Nightly.
+            // Once this feature lands in Beta/RC we should remove the wrapper.
+            activityTestRule.activity.components.core.engine.version.releaseChannel == EngineReleaseChannel.NIGHTLY,
+        ) {
+            navigationToolbar {
+            }.enterURLAndEnterToBrowser(downloadTestPage.toUri()) {
+                clickLinkMatchingText(pdfFileName)
+                verifyUrl(pdfFileURL)
+                verifyPageContent(pdfFileContent)
+            }
+        }
+    }
+
+    @Ignore("Failing because of https://bugzilla.mozilla.org/show_bug.cgi?id=1810132")
+    @SmokeTest
+    @Test
+    fun saveAndOpenPdfTest() {
+        runWithCondition(
+            // Returns the GeckoView channel set for the current version, if a feature is limited to Nightly.
+            // Once this feature lands in Beta/RC we should remove the wrapper.
+            activityTestRule.activity.components.core.engine.version.releaseChannel == EngineReleaseChannel.NIGHTLY,
+        ) {
+            navigationToolbar {
+            }.enterURLAndEnterToBrowser(downloadTestPage.toUri()) {
+                clickLinkMatchingText(pdfFileName)
+                verifyPageContent(pdfFileContent)
+            }.openThreeDotMenu {
+            }.clickShareButton {
+            }.clickSaveAsPDF {
+                // change back to simple filename
+                verifyDownloadPrompt(pdfFileName)
+            }.clickDownload {
+            }.clickOpen("application/pdf") {
+                assertExternalAppOpens("com.google.android.apps.docs")
+            }
         }
     }
 }

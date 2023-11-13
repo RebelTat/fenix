@@ -17,12 +17,12 @@ import org.mozilla.fenix.databinding.SearchSelectorBinding
 internal class SearchSelector @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
-    defStyle: Int = 0
+    defStyle: Int = 0,
 ) : RelativeLayout(context, attrs, defStyle) {
 
     private val binding = SearchSelectorBinding.inflate(LayoutInflater.from(context), this)
 
-    fun setIcon(icon: Drawable, contentDescription: String) {
+    fun setIcon(icon: Drawable?, contentDescription: String?) {
         binding.icon.setImageDrawable(icon)
         binding.icon.contentDescription = contentDescription
     }

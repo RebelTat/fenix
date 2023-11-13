@@ -21,7 +21,7 @@ class LocaleSettingsStoreTest {
         val localeList = listOf(
             Locale("fr"), // default
             otherLocale,
-            selectedLocale
+            selectedLocale,
         )
 
         localeSettingsStore =
@@ -41,5 +41,16 @@ class LocaleSettingsStoreTest {
 
         assertEquals(2, (localeSettingsStore.state.searchedLocaleList as ArrayList).size)
         assertEquals(selectedLocale, localeSettingsStore.state.searchedLocaleList[1])
+    }
+
+    @Test
+    fun `GIVEN search list is amended WHEN locale selected THEN reset search list`() = runTest {
+        localeSettingsStore.dispatch(LocaleSettingsAction.Search("Eng")).join()
+        assertEquals(2, (localeSettingsStore.state.searchedLocaleList as ArrayList).size)
+
+        localeSettingsStore.dispatch(LocaleSettingsAction.Search("fr")).join()
+        localeSettingsStore.dispatch(LocaleSettingsAction.Select(otherLocale)).join()
+
+        assertEquals(localeSettingsStore.state.localeList.size, localeSettingsStore.state.searchedLocaleList.size)
     }
 }

@@ -4,6 +4,7 @@
 
 package org.mozilla.fenix.settings.creditcards
 
+import android.annotation.SuppressLint
 import android.content.DialogInterface
 import android.os.Bundle
 import android.view.Menu
@@ -11,6 +12,8 @@ import android.view.MenuInflater
 import android.view.MenuItem
 import android.view.View
 import androidx.appcompat.app.AlertDialog
+import androidx.core.view.MenuProvider
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
@@ -34,7 +37,9 @@ import org.mozilla.fenix.settings.creditcards.view.CreditCardEditorView
 /**
  * Display a credit card editor for adding and editing a credit card.
  */
-class CreditCardEditorFragment : SecureFragment(R.layout.fragment_credit_card_editor) {
+class CreditCardEditorFragment :
+    SecureFragment(R.layout.fragment_credit_card_editor),
+    MenuProvider {
 
     private lateinit var creditCardEditorState: CreditCardEditorState
     private lateinit var creditCardEditorView: CreditCardEditorView
@@ -52,10 +57,11 @@ class CreditCardEditorFragment : SecureFragment(R.layout.fragment_credit_card_ed
 
     private lateinit var interactor: CreditCardEditorInteractor
 
+    @SuppressLint("ClickableViewAccessibility")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        setHasOptionsMenu(true)
+        requireActivity().addMenuProvider(this, viewLifecycleOwner, Lifecycle.State.RESUMED)
 
         val storage = requireContext().components.core.autofillStorage
         interactor = DefaultCreditCardEditorInteractor(
@@ -63,8 +69,8 @@ class CreditCardEditorFragment : SecureFragment(R.layout.fragment_credit_card_ed
                 storage = storage,
                 lifecycleScope = lifecycleScope,
                 navController = findNavController(),
-                showDeleteDialog = ::showDeleteDialog
-            )
+                showDeleteDialog = ::showDeleteDialog,
+            ),
         )
 
         val binding = FragmentCreditCardEditorBinding.bind(view)
@@ -77,10 +83,20 @@ class CreditCardEditorFragment : SecureFragment(R.layout.fragment_credit_card_ed
             creditCardEditorView = CreditCardEditorView(binding, interactor)
             creditCardEditorView.bind(creditCardEditorState)
 
-            binding.cardNumberInput.apply {
-                requestFocus()
-                placeCursorAtEnd()
-                showKeyboard()
+            binding.apply {
+                cardNumberInput.apply {
+                    requestFocus()
+                    placeCursorAtEnd()
+                    showKeyboard()
+                }
+                expiryMonthDropDown.setOnTouchListener { view, _ ->
+                    view?.hideKeyboard()
+                    false
+                }
+                expiryYearDropDown.setOnTouchListener { view, _ ->
+                    view?.hideKeyboard()
+                    false
+                }
             }
         }
     }
@@ -106,13 +122,13 @@ class CreditCardEditorFragment : SecureFragment(R.layout.fragment_credit_card_ed
         redirectToReAuth(
             listOf(R.id.creditCardsManagementFragment),
             findNavController().currentDestination?.id,
-            R.id.creditCardEditorFragment
+            R.id.creditCardEditorFragment,
         )
 
         super.onPause()
     }
 
-    override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
+    override fun onCreateMenu(menu: Menu, inflater: MenuInflater) {
         inflater.inflate(R.menu.credit_card_editor, menu)
         this.menu = menu
 
@@ -120,7 +136,7 @@ class CreditCardEditorFragment : SecureFragment(R.layout.fragment_credit_card_ed
     }
 
     @Suppress("MagicNumber")
-    override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
+    override fun onMenuItemSelected(item: MenuItem): Boolean = when (item.itemId) {
         R.id.delete_credit_card_button -> {
             args.creditCard?.let { interactor.onDeleteCardButtonClicked(it.guid) }
             true

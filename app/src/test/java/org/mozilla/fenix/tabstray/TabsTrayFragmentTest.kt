@@ -35,9 +35,9 @@ import mozilla.components.service.glean.testing.GleanTestRule
 import mozilla.components.support.test.robolectric.testContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertSame
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -53,8 +53,6 @@ import org.mozilla.fenix.ext.settings
 import org.mozilla.fenix.helpers.FenixRobolectricTestRunner
 import org.mozilla.fenix.helpers.MockkRetryTestRule
 import org.mozilla.fenix.home.HomeScreenViewModel
-import org.mozilla.fenix.tabstray.browser.BrowserTrayInteractor
-import org.mozilla.fenix.tabstray.browser.InactiveTabsInteractor
 import org.mozilla.fenix.tabstray.ext.showWithTheme
 import org.mozilla.fenix.utils.allowUndo
 
@@ -114,7 +112,7 @@ class TabsTrayFragmentTest {
                     any(),
                     fabButtonBinding.newTabButton,
                     TabsTrayFragment.ELEVATION,
-                    false
+                    false,
                 )
             }
         } finally {
@@ -145,7 +143,7 @@ class TabsTrayFragmentTest {
                     any(),
                     null,
                     TabsTrayFragment.ELEVATION,
-                    false
+                    false,
                 )
             }
         } finally {
@@ -177,7 +175,7 @@ class TabsTrayFragmentTest {
                     any(),
                     fabButtonBinding.newTabButton,
                     TabsTrayFragment.ELEVATION,
-                    false
+                    false,
                 )
             }
         } finally {
@@ -208,7 +206,7 @@ class TabsTrayFragmentTest {
                     any(),
                     null,
                     TabsTrayFragment.ELEVATION,
-                    false
+                    false,
                 )
             }
         } finally {
@@ -222,9 +220,6 @@ class TabsTrayFragmentTest {
         val store: TabsTrayStore = mockk()
         val lifecycleOwner = mockk<LifecycleOwner>(relaxed = true)
         val trayInteractor: TabsTrayInteractor = mockk()
-        val browserInteractor: BrowserTrayInteractor = mockk()
-        val navigationInteractor: NavigationInteractor = mockk()
-        val inactiveTabsInteractor: InactiveTabsInteractor = mockk()
         val browserStore: BrowserStore = mockk()
         every { context.components.core.store } returns browserStore
 
@@ -233,18 +228,13 @@ class TabsTrayFragmentTest {
             lifecycleOwner = lifecycleOwner,
             store = store,
             trayInteractor = trayInteractor,
-            browserInteractor = browserInteractor,
-            navigationInteractor = navigationInteractor,
-            inactiveTabsInteractor = inactiveTabsInteractor,
         )
 
         val adapter = (tabsTrayBinding.tabsTray.adapter as TrayPagerAdapter)
         assertSame(context, adapter.context)
         assertSame(lifecycleOwner, adapter.lifecycleOwner)
         assertSame(store, adapter.tabsTrayStore)
-        assertSame(trayInteractor, adapter.tabsTrayInteractor)
-        assertSame(browserInteractor, adapter.browserInteractor)
-        assertSame(navigationInteractor, adapter.navInteractor)
+        assertSame(trayInteractor, adapter.interactor)
         assertSame(browserStore, adapter.browserStore)
         assertFalse(tabsTrayBinding.tabsTray.isUserInputEnabled)
     }
@@ -385,7 +375,9 @@ class TabsTrayFragmentTest {
     @Test
     fun `WHEN the tabs tray is declared in XML THEN certain options are set for the behavior`() {
         tabsTrayBinding = ComponentTabstray2Binding.inflate(
-            LayoutInflater.from(testContext), CoordinatorLayout(testContext), true
+            LayoutInflater.from(testContext),
+            CoordinatorLayout(testContext),
+            true,
         )
         val behavior = BottomSheetBehavior.from(tabsTrayBinding.tabWrapper)
 

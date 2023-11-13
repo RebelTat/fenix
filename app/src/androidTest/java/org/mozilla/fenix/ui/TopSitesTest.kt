@@ -14,10 +14,13 @@ import org.junit.Test
 import org.mozilla.fenix.R
 import org.mozilla.fenix.customannotations.SmokeTest
 import org.mozilla.fenix.helpers.AndroidAssetDispatcher
-import org.mozilla.fenix.helpers.FeatureSettingsHelper
+import org.mozilla.fenix.helpers.Constants.defaultTopSitesList
 import org.mozilla.fenix.helpers.HomeActivityIntentTestRule
-import org.mozilla.fenix.helpers.TestAssetHelper
+import org.mozilla.fenix.helpers.RetryTestRule
+import org.mozilla.fenix.helpers.TestAssetHelper.getGenericAsset
+import org.mozilla.fenix.helpers.TestHelper.generateRandomString
 import org.mozilla.fenix.helpers.TestHelper.getStringResource
+import org.mozilla.fenix.helpers.TestHelper.waitUntilSnackbarGone
 import org.mozilla.fenix.ui.robots.browserScreen
 import org.mozilla.fenix.ui.robots.homeScreen
 import org.mozilla.fenix.ui.robots.navigationToolbar
@@ -32,69 +35,67 @@ import org.mozilla.fenix.ui.robots.navigationToolbar
  */
 
 class TopSitesTest {
-    private val mDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+    private lateinit var mDevice: UiDevice
     private lateinit var mockWebServer: MockWebServer
-    private val featureSettingsHelper = FeatureSettingsHelper()
 
     @get:Rule
-    val activityIntentTestRule = HomeActivityIntentTestRule(skipOnboarding = true)
+    val activityIntentTestRule = HomeActivityIntentTestRule.withDefaultSettingsOverrides(skipOnboarding = true)
+
+    @get:Rule
+    val retryTestRule = RetryTestRule(3)
 
     @Before
     fun setUp() {
+        mDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
         mockWebServer = MockWebServer().apply {
             dispatcher = AndroidAssetDispatcher()
             start()
         }
-
-        featureSettingsHelper.setJumpBackCFREnabled(false)
     }
 
     @After
     fun tearDown() {
         mockWebServer.shutdown()
-        featureSettingsHelper.resetAllFeatureFlags()
     }
 
     @SmokeTest
     @Test
     fun verifyAddToFirefoxHome() {
-        val defaultWebPage = TestAssetHelper.getGenericAsset(mockWebServer, 1)
-        val defaultWebPageTitle = "Test_Page_1"
+        val defaultWebPage = getGenericAsset(mockWebServer, 1)
 
         navigationToolbar {
         }.enterURLAndEnterToBrowser(defaultWebPage.url) {
         }.openThreeDotMenu {
             expandMenu()
-            verifyAddToTopSitesButton()
+            verifyAddToShortcutsButton()
         }.addToFirefoxHome {
             verifySnackBarText(getStringResource(R.string.snackbar_added_to_shortcuts))
         }.goToHomescreen {
             verifyExistingTopSitesList()
-            verifyExistingTopSitesTabs(defaultWebPageTitle)
+            verifyExistingTopSitesTabs(defaultWebPage.title)
         }
     }
 
     @Test
     fun verifyOpenTopSiteNormalTab() {
-        val defaultWebPage = TestAssetHelper.getGenericAsset(mockWebServer, 1)
-        val defaultWebPageTitle = "Test_Page_1"
+        val defaultWebPage = getGenericAsset(mockWebServer, 1)
 
         navigationToolbar {
         }.enterURLAndEnterToBrowser(defaultWebPage.url) {
         }.openThreeDotMenu {
             expandMenu()
-            verifyAddToTopSitesButton()
+            verifyAddToShortcutsButton()
         }.addToFirefoxHome {
             verifySnackBarText(getStringResource(R.string.snackbar_added_to_shortcuts))
         }.goToHomescreen {
             verifyExistingTopSitesList()
-            verifyExistingTopSitesTabs(defaultWebPageTitle)
-        }.openTopSiteTabWithTitle(title = defaultWebPageTitle) {
+            verifyExistingTopSitesTabs(defaultWebPage.title)
+        }.openTopSiteTabWithTitle(title = defaultWebPage.title) {
             verifyUrl(defaultWebPage.url.toString().replace("http://", ""))
         }.goToHomescreen {
             verifyExistingTopSitesList()
-            verifyExistingTopSitesTabs(defaultWebPageTitle)
-        }.openContextMenuOnTopSitesWithTitle(defaultWebPageTitle) {
+            verifyExistingTopSitesTabs(defaultWebPage.title)
+        }.openContextMenuOnTopSitesWithTitle(defaultWebPage.title) {
             verifyTopSiteContextMenuItems()
         }
 
@@ -104,20 +105,19 @@ class TopSitesTest {
 
     @Test
     fun verifyOpenTopSitePrivateTab() {
-        val defaultWebPage = TestAssetHelper.getGenericAsset(mockWebServer, 1)
-        val defaultWebPageTitle = "Test_Page_1"
+        val defaultWebPage = getGenericAsset(mockWebServer, 1)
 
         navigationToolbar {
         }.enterURLAndEnterToBrowser(defaultWebPage.url) {
         }.openThreeDotMenu {
             expandMenu()
-            verifyAddToTopSitesButton()
+            verifyAddToShortcutsButton()
         }.addToFirefoxHome {
             verifySnackBarText(getStringResource(R.string.snackbar_added_to_shortcuts))
         }.goToHomescreen {
             verifyExistingTopSitesList()
-            verifyExistingTopSitesTabs(defaultWebPageTitle)
-        }.openContextMenuOnTopSitesWithTitle(defaultWebPageTitle) {
+            verifyExistingTopSitesTabs(defaultWebPage.title)
+        }.openContextMenuOnTopSitesWithTitle(defaultWebPage.title) {
             verifyTopSiteContextMenuItems()
         }.openTopSiteInPrivateTab {
             verifyCurrentPrivateSession(activityIntentTestRule.activity.applicationContext)
@@ -126,65 +126,103 @@ class TopSitesTest {
 
     @Test
     fun verifyRenameTopSite() {
-        val defaultWebPage = TestAssetHelper.getGenericAsset(mockWebServer, 1)
-        val defaultWebPageTitle = "Test_Page_1"
-        val defaultWebPageTitleNew = "Test_Page_2"
+        val defaultWebPage = getGenericAsset(mockWebServer, 1)
+        val newPageTitle = generateRandomString(5)
 
         navigationToolbar {
         }.enterURLAndEnterToBrowser(defaultWebPage.url) {
+            waitForPageToLoad()
         }.openThreeDotMenu {
             expandMenu()
-            verifyAddToTopSitesButton()
+            verifyAddToShortcutsButton()
         }.addToFirefoxHome {
             verifySnackBarText(getStringResource(R.string.snackbar_added_to_shortcuts))
         }.goToHomescreen {
             verifyExistingTopSitesList()
-            verifyExistingTopSitesTabs(defaultWebPageTitle)
-        }.openContextMenuOnTopSitesWithTitle(defaultWebPageTitle) {
+            verifyExistingTopSitesTabs(defaultWebPage.title)
+        }.openContextMenuOnTopSitesWithTitle(defaultWebPage.title) {
             verifyTopSiteContextMenuItems()
-        }.renameTopSite(defaultWebPageTitleNew) {
+        }.renameTopSite(newPageTitle) {
             verifyExistingTopSitesList()
-            verifyExistingTopSitesTabs(defaultWebPageTitleNew)
+            verifyExistingTopSitesTabs(newPageTitle)
         }
     }
 
     @Test
     fun verifyRemoveTopSite() {
-        val defaultWebPage = TestAssetHelper.getGenericAsset(mockWebServer, 1)
-        val defaultWebPageTitle = "Test_Page_1"
+        val defaultWebPage = getGenericAsset(mockWebServer, 1)
 
         navigationToolbar {
         }.enterURLAndEnterToBrowser(defaultWebPage.url) {
         }.openThreeDotMenu {
             expandMenu()
-            verifyAddToTopSitesButton()
+            verifyAddToShortcutsButton()
         }.addToFirefoxHome {
             verifySnackBarText(getStringResource(R.string.snackbar_added_to_shortcuts))
         }.goToHomescreen {
             verifyExistingTopSitesList()
-            verifyExistingTopSitesTabs(defaultWebPageTitle)
-        }.openContextMenuOnTopSitesWithTitle(defaultWebPageTitle) {
+            verifyExistingTopSitesTabs(defaultWebPage.title)
+        }.openContextMenuOnTopSitesWithTitle(defaultWebPage.title) {
             verifyTopSiteContextMenuItems()
         }.removeTopSite {
-            verifyNotExistingTopSitesList(defaultWebPageTitle)
+            verifyNotExistingTopSitesList(defaultWebPage.title)
         }
     }
 
     @Test
-    fun verifyDefaultTopSitesLocale_EN() {
-        // en-US defaults
-        val defaultTopSites = arrayOf(
-            "Top Articles",
-            "Wikipedia",
-            "Google"
-        )
+    fun verifyUndoRemoveTopSite() {
+        val defaultWebPage = getGenericAsset(mockWebServer, 1)
 
+        navigationToolbar {
+        }.enterURLAndEnterToBrowser(defaultWebPage.url) {
+        }.openThreeDotMenu {
+            expandMenu()
+            verifyAddToShortcutsButton()
+        }.addToFirefoxHome {
+            verifySnackBarText(getStringResource(R.string.snackbar_added_to_shortcuts))
+        }.goToHomescreen {
+            verifyExistingTopSitesList()
+            verifyExistingTopSitesTabs(defaultWebPage.title)
+        }.openContextMenuOnTopSitesWithTitle(defaultWebPage.title) {
+            verifyTopSiteContextMenuItems()
+        }.removeTopSite {
+            clickUndoSnackBarButton()
+            verifyExistingTopSitesTabs(defaultWebPage.title)
+        }
+    }
+
+    @Test
+    fun verifyRemoveTopSiteFromMainMenu() {
+        val defaultWebPage = getGenericAsset(mockWebServer, 1)
+
+        navigationToolbar {
+        }.enterURLAndEnterToBrowser(defaultWebPage.url) {
+        }.openThreeDotMenu {
+            expandMenu()
+            verifyAddToShortcutsButton()
+        }.addToFirefoxHome {
+            verifySnackBarText(getStringResource(R.string.snackbar_added_to_shortcuts))
+        }.goToHomescreen {
+            verifyExistingTopSitesList()
+            verifyExistingTopSitesTabs(defaultWebPage.title)
+        }.openTopSiteTabWithTitle(defaultWebPage.title) {
+        }.openThreeDotMenu {
+            verifyRemoveFromShortcutsButton()
+        }.clickRemoveFromShortcuts {
+        }.goToHomescreen {
+            verifyNotExistingTopSitesList(defaultWebPage.title)
+        }
+    }
+
+    // Expected for en-us defaults
+    @Test
+    fun verifyDefaultTopSitesList() {
         homeScreen { }.dismissOnboarding()
 
         homeScreen {
             verifyExistingTopSitesList()
-            defaultTopSites.forEach { item ->
-                verifyExistingTopSitesTabs(item)
+            defaultTopSitesList.values.forEach { value ->
+                verifyExistingTopSitesTabs(value)
             }
         }
     }
@@ -192,12 +230,11 @@ class TopSitesTest {
     @SmokeTest
     @Test
     fun addAndRemoveMostViewedTopSiteTest() {
-        val defaultWebPage = TestAssetHelper.getGenericAsset(mockWebServer, 1)
+        val defaultWebPage = getGenericAsset(mockWebServer, 1)
 
         for (i in 0..1) {
             navigationToolbar {
             }.enterURLAndEnterToBrowser(defaultWebPage.url) {
-                mDevice.waitForIdle()
                 waitForPageToLoad()
             }
         }
@@ -208,6 +245,8 @@ class TopSitesTest {
             verifyExistingTopSitesTabs(defaultWebPage.title)
         }.openContextMenuOnTopSitesWithTitle(defaultWebPage.title) {
         }.deleteTopSiteFromHistory {
+            verifySnackBarText(getStringResource(R.string.snackbar_top_site_removed))
+            waitUntilSnackbarGone()
         }.openThreeDotMenu {
         }.openHistory {
             verifyEmptyHistoryView()

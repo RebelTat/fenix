@@ -13,16 +13,15 @@ kind-dependencies:
 primary-dependency: signing
 
 only-for-build-types:
-    - nightly
+    - nightly-simulation
 
 only-for-abis:
     - armeabi-v7a
-    - arm64-v8a
 
-job-defaults:
+task-defaults:
     attributes:
         artifact_prefix: public/test_info
-        nightly: true
+        nightly-test: true
     dependencies:
         geckoview-nightly: geckoview-nightly
     notify:
@@ -43,12 +42,10 @@ job-defaults:
         tier: 2
         platform:
             by-abi:
-                arm64-v8a: android-hw-p2-8-0-android-aarch64-shippable-qr/opt
-                armeabi-v7a: android-hw-g5-7-0-arm7-api-16-shippable-qr/opt
+                armeabi-v7a: android-hw-a51-11-0-aarch64-shippable-qr/opt
     worker-type:
         by-abi:
-            armeabi-v7a: t-bitbar-gw-perf-g5
-            arm64-v8a: t-bitbar-gw-perf-p2
+            armeabi-v7a: t-bitbar-gw-perf-a51
     worker:
         max-run-time: 3600
         env:
@@ -100,8 +97,9 @@ job-defaults:
             - linux64-minidump-stackwalk
             - linux64-node-16
 
-jobs:
+tasks:
     tp6m:
+        run-with-fission: True
         page-load-tests:
             - amazon
             - instagram
@@ -125,6 +123,7 @@ jobs:
             - [google-search-restaurants, gsearch-r]
 
     tp6m-hv:
+        run-with-fission: True
         page-load-tests:
             - google
             - [amazon-search, amazon-s]
@@ -133,6 +132,12 @@ jobs:
             - facebook
             - [youtube-watch, youtube-w]
             - allrecipes
+
+    speedometer3:
+        description: "Raptor Speedometer 3 Benchmark tests on Fenix"
+        test-name: speedometer3
+        run-visual-metrics: False
+        chimera: False
 
     youtube-playback-av1-sfr:
         description: "Raptor YouTube Playback AV1 SFR on Fenix"

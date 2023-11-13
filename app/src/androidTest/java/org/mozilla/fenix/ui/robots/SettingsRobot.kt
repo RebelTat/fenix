@@ -6,6 +6,8 @@
 
 package org.mozilla.fenix.ui.robots
 
+import android.content.Intent
+import android.net.Uri
 import androidx.recyclerview.widget.RecyclerView
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.ViewInteraction
@@ -14,7 +16,8 @@ import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.contrib.RecyclerViewActions
 import androidx.test.espresso.intent.Intents.intended
 import androidx.test.espresso.intent.matcher.IntentMatchers
-import androidx.test.espresso.intent.matcher.IntentMatchers.toPackage
+import androidx.test.espresso.intent.matcher.IntentMatchers.hasAction
+import androidx.test.espresso.intent.matcher.IntentMatchers.hasData
 import androidx.test.espresso.matcher.ViewMatchers
 import androidx.test.espresso.matcher.ViewMatchers.Visibility
 import androidx.test.espresso.matcher.ViewMatchers.hasDescendant
@@ -27,14 +30,13 @@ import androidx.test.espresso.matcher.ViewMatchers.withClassName
 import androidx.test.espresso.matcher.ViewMatchers.withEffectiveVisibility
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.espresso.matcher.ViewMatchers.withText
-import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.By.textContains
-import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.UiObject
 import androidx.test.uiautomator.UiScrollable
 import androidx.test.uiautomator.UiSelector
 import androidx.test.uiautomator.Until
+import junit.framework.AssertionFailedError
 import org.hamcrest.CoreMatchers
 import org.hamcrest.Matchers.allOf
 import org.hamcrest.Matchers.endsWith
@@ -42,14 +44,18 @@ import org.junit.Assert.assertTrue
 import org.mozilla.fenix.R
 import org.mozilla.fenix.helpers.Constants.LISTS_MAXSWIPES
 import org.mozilla.fenix.helpers.Constants.PackageName.GOOGLE_PLAY_SERVICES
+import org.mozilla.fenix.helpers.Constants.RETRY_COUNT
+import org.mozilla.fenix.helpers.MatcherHelper.itemContainingText
 import org.mozilla.fenix.helpers.TestAssetHelper.waitingTime
 import org.mozilla.fenix.helpers.TestHelper.appName
 import org.mozilla.fenix.helpers.TestHelper.getStringResource
 import org.mozilla.fenix.helpers.TestHelper.hasCousin
 import org.mozilla.fenix.helpers.TestHelper.isPackageInstalled
+import org.mozilla.fenix.helpers.TestHelper.mDevice
 import org.mozilla.fenix.helpers.TestHelper.packageName
 import org.mozilla.fenix.helpers.TestHelper.scrollToElementByText
 import org.mozilla.fenix.helpers.click
+import org.mozilla.fenix.settings.SupportUtils
 import org.mozilla.fenix.ui.robots.SettingsRobot.Companion.DEFAULT_APPS_SETTINGS_ACTION
 
 /**
@@ -80,8 +86,8 @@ class SettingsRobot {
     fun verifyHTTPSOnlyModeState(state: String) = assertHTTPSOnlyModeState(state)
     fun verifyEnhancedTrackingProtectionButton() = assertEnhancedTrackingProtectionButton()
     fun verifyLoginsAndPasswordsButton() = assertLoginsAndPasswordsButton()
-    fun verifyEnhancedTrackingProtectionState(state: String) =
-        assertEnhancedTrackingProtectionState(state)
+    fun verifyEnhancedTrackingProtectionState(option: String) =
+        assertEnhancedTrackingProtectionState(option)
     fun verifyPrivateBrowsingButton() = assertPrivateBrowsingButton()
     fun verifySitePermissionsButton() = assertSitePermissionsButton()
     fun verifyDeleteBrowsingDataButton() = assertDeleteBrowsingDataButton()
@@ -112,9 +118,6 @@ class SettingsRobot {
     fun verifyGooglePlayRedirect() = assertGooglePlayRedirect()
 
     class Transition {
-
-        val mDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
-
         fun goBack(interact: HomeScreenRobot.() -> Unit): HomeScreenRobot.Transition {
             goBackButton().click()
 
@@ -131,16 +134,13 @@ class SettingsRobot {
 
         fun openAboutFirefoxPreview(interact: SettingsSubMenuAboutRobot.() -> Unit):
             SettingsSubMenuAboutRobot.Transition {
-
             aboutFirefoxHeading().click()
-
             SettingsSubMenuAboutRobot().interact()
             return SettingsSubMenuAboutRobot.Transition()
         }
 
         fun openSearchSubMenu(interact: SettingsSubMenuSearchRobot.() -> Unit):
             SettingsSubMenuSearchRobot.Transition {
-
             fun searchEngineButton() = onView(withText("Search"))
             searchEngineButton().click()
 
@@ -148,17 +148,15 @@ class SettingsRobot {
             return SettingsSubMenuSearchRobot.Transition()
         }
 
-        fun openCustomizeSubMenu(interact: SettingsSubMenuThemeRobot.() -> Unit): SettingsSubMenuThemeRobot.Transition {
-
+        fun openCustomizeSubMenu(interact: SettingsSubMenuCustomizeRobot.() -> Unit): SettingsSubMenuCustomizeRobot.Transition {
             fun customizeButton() = onView(withText("Customize"))
             customizeButton().click()
 
-            SettingsSubMenuThemeRobot().interact()
-            return SettingsSubMenuThemeRobot.Transition()
+            SettingsSubMenuCustomizeRobot().interact()
+            return SettingsSubMenuCustomizeRobot.Transition()
         }
 
         fun openTabsSubMenu(interact: SettingsSubMenuTabsRobot.() -> Unit): SettingsSubMenuTabsRobot.Transition {
-
             fun tabsButton() = onView(withText("Tabs"))
             tabsButton().click()
 
@@ -167,12 +165,19 @@ class SettingsRobot {
         }
 
         fun openHomepageSubMenu(interact: SettingsSubMenuHomepageRobot.() -> Unit): SettingsSubMenuHomepageRobot.Transition {
-
             mDevice.findObject(UiSelector().textContains("Homepage")).waitForExists(waitingTime)
             onView(withText(R.string.preferences_home_2)).click()
 
             SettingsSubMenuHomepageRobot().interact()
             return SettingsSubMenuHomepageRobot.Transition()
+        }
+
+        fun openAutofillSubMenu(interact: SettingsSubMenuAutofillRobot.() -> Unit): SettingsSubMenuAutofillRobot.Transition {
+            mDevice.findObject(UiSelector().textContains(getStringResource(R.string.preferences_autofill))).waitForExists(waitingTime)
+            onView(withText(R.string.preferences_autofill)).click()
+
+            SettingsSubMenuAutofillRobot().interact()
+            return SettingsSubMenuAutofillRobot.Transition()
         }
 
         fun openAccessibilitySubMenu(interact: SettingsSubMenuAccessibilityRobot.() -> Unit): SettingsSubMenuAccessibilityRobot.Transition {
@@ -187,15 +192,18 @@ class SettingsRobot {
             return SettingsSubMenuAccessibilityRobot.Transition()
         }
 
-        fun openLanguageSubMenu(interact: SettingsSubMenuLanguageRobot.() -> Unit): SettingsSubMenuLanguageRobot.Transition {
+        fun openLanguageSubMenu(
+            localizedText: String = getStringResource(R.string.preferences_language),
+            interact: SettingsSubMenuLanguageRobot.() -> Unit,
+        ): SettingsSubMenuLanguageRobot.Transition {
             onView(withId(R.id.recycler_view))
                 .perform(
                     RecyclerViewActions.actionOnItem<RecyclerView.ViewHolder>(
                         hasDescendant(
-                            withText(R.string.preferences_language)
+                            withText(localizedText),
                         ),
-                        ViewActions.click()
-                    )
+                        ViewActions.click(),
+                    ),
                 )
 
             SettingsSubMenuLanguageRobot().interact()
@@ -209,6 +217,14 @@ class SettingsRobot {
 
             SettingsSubMenuSetDefaultBrowserRobot().interact()
             return SettingsSubMenuSetDefaultBrowserRobot.Transition()
+        }
+
+        fun openCookieBannerReductionSubMenu(interact: SettingsSubMenuCookieBannerReductionRobot.() -> Unit): SettingsSubMenuCookieBannerReductionRobot.Transition {
+            scrollToElementByText(getStringResource(R.string.preferences_cookie_banner_reduction))
+            itemContainingText(getStringResource(R.string.preferences_cookie_banner_reduction)).click()
+
+            SettingsSubMenuCookieBannerReductionRobot().interact()
+            return SettingsSubMenuCookieBannerReductionRobot.Transition()
         }
 
         fun openEnhancedTrackingProtectionSubMenu(interact: SettingsSubMenuEnhancedTrackingProtectionRobot.() -> Unit): SettingsSubMenuEnhancedTrackingProtectionRobot.Transition {
@@ -231,7 +247,7 @@ class SettingsRobot {
         }
 
         fun openTurnOnSyncMenu(interact: SettingsTurnOnSyncRobot.() -> Unit): SettingsTurnOnSyncRobot.Transition {
-            fun turnOnSyncButton() = onView(withText("Turn on Sync"))
+            fun turnOnSyncButton() = onView(withText("Sync and save your data"))
             turnOnSyncButton().click()
 
             SettingsTurnOnSyncRobot().interact()
@@ -325,8 +341,8 @@ private fun assertSettingsToolbar() =
         CoreMatchers.allOf(
             withId(R.id.navigationToolbar),
             hasDescendant(ViewMatchers.withContentDescription(R.string.action_bar_up_description)),
-            hasDescendant(withText(R.string.settings))
-        )
+            hasDescendant(withText(R.string.settings)),
+        ),
     ).check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
 private fun assertGeneralHeading() {
@@ -347,8 +363,10 @@ private fun assertHomepageButton() =
 private fun assertAutofillButton() =
     onView(withText(R.string.preferences_autofill)).check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
-private fun assertLanguageButton() =
+private fun assertLanguageButton() {
+    scrollToElementByText(getStringResource(R.string.preferences_language))
     onView(withText(R.string.preferences_language)).check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
+}
 
 private fun assertCustomizeButton() = onView(withText("Customize"))
     .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
@@ -396,7 +414,7 @@ private fun assertPrivacyHeading() {
 private fun assertHTTPSOnlyModeButton() {
     scrollToElementByText(getStringResource(R.string.preferences_https_only_title))
     onView(
-        withText(R.string.preferences_https_only_title)
+        withText(R.string.preferences_https_only_title),
     ).check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 }
 
@@ -404,8 +422,8 @@ private fun assertHTTPSOnlyModeState(state: String) {
     onView(
         allOf(
             withText(R.string.preferences_https_only_title),
-            hasSibling(withText(state))
-        )
+            hasSibling(withText(state)),
+        ),
     ).check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 }
 
@@ -413,8 +431,8 @@ private fun assertEnhancedTrackingProtectionButton() {
     mDevice.wait(Until.findObject(By.text("Privacy and Security")), waitingTime)
     onView(withId(R.id.recycler_view)).perform(
         RecyclerViewActions.scrollTo<RecyclerView.ViewHolder>(
-            hasDescendant(withText("Enhanced Tracking Protection"))
-        )
+            hasDescendant(withText("Enhanced Tracking Protection")),
+        ),
     ).check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 }
 
@@ -458,8 +476,8 @@ private fun assertDeleteBrowsingDataState(state: String) {
     onView(
         allOf(
             withText(R.string.preferences_delete_browsing_data_on_quit),
-            hasSibling(withText(state))
-        )
+            hasSibling(withText(state)),
+        ),
     ).check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 }
 
@@ -492,10 +510,10 @@ fun assertOpenLinksInAppsSwitchState(enabled: Boolean) {
                     hasCousin(
                         allOf(
                             withClassName(endsWith("Switch")),
-                            isChecked()
-                        )
-                    )
-                )
+                            isChecked(),
+                        ),
+                    ),
+                ),
             )
     } else {
         openLinksInAppsButton()
@@ -504,10 +522,10 @@ fun assertOpenLinksInAppsSwitchState(enabled: Boolean) {
                     hasCousin(
                         allOf(
                             withClassName(endsWith("Switch")),
-                            isNotChecked()
-                        )
-                    )
-                )
+                            isNotChecked(),
+                        ),
+                    ),
+                ),
             )
     }
 }
@@ -522,8 +540,8 @@ private fun assertDeveloperToolsHeading() {
 private fun assertAdvancedHeading() {
     onView(withId(R.id.recycler_view)).perform(
         RecyclerViewActions.scrollTo<RecyclerView.ViewHolder>(
-            hasDescendant(withText("Add-ons"))
-        )
+            hasDescendant(withText("Add-ons")),
+        ),
     )
 
     onView(withText("Add-ons"))
@@ -533,8 +551,8 @@ private fun assertAdvancedHeading() {
 private fun assertAddonsButton() {
     onView(withId(R.id.recycler_view)).perform(
         RecyclerViewActions.scrollTo<RecyclerView.ViewHolder>(
-            hasDescendant(withText("Add-ons"))
-        )
+            hasDescendant(withText("Add-ons")),
+        ),
     )
 
     addonsManagerButton()
@@ -569,7 +587,21 @@ private fun rateOnGooglePlayHeading(): UiObject {
 }
 
 private fun aboutFirefoxHeading(): UiObject {
-    settingsList().scrollToEnd(LISTS_MAXSWIPES)
+    for (i in 1..RETRY_COUNT) {
+        try {
+            settingsList().scrollToEnd(LISTS_MAXSWIPES)
+            assertTrue(
+                mDevice.findObject(UiSelector().text("About $appName"))
+                    .waitForExists(waitingTime),
+            )
+
+            break
+        } catch (e: AssertionError) {
+            if (i == RETRY_COUNT) {
+                throw e
+            }
+        }
+    }
     return mDevice.findObject(UiSelector().text("About $appName"))
 }
 
@@ -581,7 +613,16 @@ fun clickRateButtonGooglePlay() {
 
 private fun assertGooglePlayRedirect() {
     if (isPackageInstalled(GOOGLE_PLAY_SERVICES)) {
-        intended(toPackage(GOOGLE_PLAY_SERVICES))
+        try {
+            intended(
+                allOf(
+                    hasAction(Intent.ACTION_VIEW),
+                    hasData(Uri.parse(SupportUtils.RATE_APP_URL)),
+                ),
+            )
+        } catch (e: AssertionFailedError) {
+            BrowserRobot().verifyRateOnGooglePlayURL()
+        }
     } else {
         BrowserRobot().verifyRateOnGooglePlayURL()
     }

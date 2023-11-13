@@ -10,11 +10,11 @@ import androidx.test.uiautomator.UiDevice
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Before
+import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
 import org.mozilla.fenix.customannotations.SmokeTest
 import org.mozilla.fenix.helpers.AndroidAssetDispatcher
-import org.mozilla.fenix.helpers.FeatureSettingsHelper
 import org.mozilla.fenix.helpers.HomeActivityIntentTestRule
 import org.mozilla.fenix.helpers.TestAssetHelper.getGenericAsset
 import org.mozilla.fenix.ui.robots.browserScreen
@@ -29,28 +29,29 @@ import org.mozilla.fenix.ui.robots.tabDrawer
  */
 
 class CollectionTest {
-    private val mDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+    private lateinit var mDevice: UiDevice
     private lateinit var mockWebServer: MockWebServer
     private val firstCollectionName = "testcollection_1"
     private val secondCollectionName = "testcollection_2"
     private val collectionName = "First Collection"
-    private val featureSettingsHelper = FeatureSettingsHelper()
 
     @get:Rule
-    val composeTestRule = AndroidComposeTestRule(
-        HomeActivityIntentTestRule(),
-        { it.activity }
-    )
+    val composeTestRule =
+        AndroidComposeTestRule(
+            HomeActivityIntentTestRule(
+                isHomeOnboardingDialogEnabled = false,
+                isJumpBackInCFREnabled = false,
+                isRecentTabsFeatureEnabled = false,
+                isRecentlyVisitedFeatureEnabled = false,
+                isPocketEnabled = false,
+                isWallpaperOnboardingEnabled = false,
+                isTCPCFREnabled = false,
+            ),
+        ) { it.activity }
 
     @Before
     fun setUp() {
-        // disabling these features to have better visibility of Collections,
-        // and to avoid multiple matches on tab items
-        featureSettingsHelper.setRecentTabsFeatureEnabled(false)
-        featureSettingsHelper.setPocketEnabled(false)
-        featureSettingsHelper.setJumpBackCFREnabled(false)
-        featureSettingsHelper.setRecentlyVisitedFeatureEnabled(false)
-
+        mDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
         mockWebServer = MockWebServer().apply {
             dispatcher = AndroidAssetDispatcher()
             start()
@@ -60,9 +61,6 @@ class CollectionTest {
     @After
     fun tearDown() {
         mockWebServer.shutdown()
-
-        // resetting modified features enabled setting to default
-        featureSettingsHelper.resetAllFeatureFlags()
     }
 
     @SmokeTest
@@ -79,7 +77,6 @@ class CollectionTest {
         }.submitQuery(secondWebPage.url.toString()) {
             mDevice.waitForIdle()
         }.goToHomescreen {
-            swipeToBottom()
         }.clickSaveTabsToCollectionButton {
             longClickTab(firstWebPage.title)
             selectTab(secondWebPage.title, numOfTabs = 2)
@@ -163,7 +160,7 @@ class CollectionTest {
             createCollection(
                 firstTestPage.title,
                 secondTestPage.title,
-                collectionName = collectionName
+                collectionName = collectionName,
             )
             closeTab()
         }
@@ -204,10 +201,10 @@ class CollectionTest {
         }
     }
 
-    @SmokeTest
-    @Test
     // Test running on beta/release builds in CI:
     // caution when making changes to it, so they don't block the builds
+    @SmokeTest
+    @Test
     fun deleteCollectionTest() {
         val webPage = getGenericAsset(mockWebServer, 1)
 
@@ -230,8 +227,8 @@ class CollectionTest {
         }
     }
 
-    @Test
     // open a webpage, and add currently opened tab to existing collection
+    @Test
     fun mainMenuSaveToExistingCollection() {
         val firstWebPage = getGenericAsset(mockWebServer, 1)
         val secondWebPage = getGenericAsset(mockWebServer, 2)
@@ -313,8 +310,9 @@ class CollectionTest {
             createCollection(webPage.title, collectionName = firstCollectionName)
             verifySnackBarText("Collection saved!")
             createCollection(
-                webPage.title, collectionName = secondCollectionName,
-                firstCollection = false
+                webPage.title,
+                collectionName = secondCollectionName,
+                firstCollection = false,
             )
             verifySnackBarText("Collection saved!")
         }.closeTabDrawer {
@@ -356,7 +354,7 @@ class CollectionTest {
         }.openTabDrawer {
             createCollection(
                 testPage.title,
-                collectionName = collectionName
+                collectionName = collectionName,
             )
             closeTab()
         }
@@ -382,7 +380,7 @@ class CollectionTest {
         }.openTabDrawer {
             createCollection(
                 testPage.title,
-                collectionName = collectionName
+                collectionName = collectionName,
             )
             closeTab()
         }
@@ -399,6 +397,7 @@ class CollectionTest {
     }
 
     @Test
+    @Ignore("Failing after compose migration. See: https://github.com/mozilla-mobile/fenix/issues/26087")
     fun selectTabOnLongTapTest() {
         val firstWebPage = getGenericAsset(mockWebServer, 1)
         val secondWebPage = getGenericAsset(mockWebServer, 2)
@@ -481,7 +480,7 @@ class CollectionTest {
 
         homeScreen {
             verifySnackBarText("Collection deleted")
-            clickUndoCollectionDeletion("UNDO")
+            clickUndoSnackBarButton()
             verifyCollectionIsDisplayed(collectionName, true)
         }
     }

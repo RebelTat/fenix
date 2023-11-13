@@ -42,7 +42,7 @@ class MetricsUtilsTestRobolectric {
         MetricsUtils.recordSearchMetrics(
             engine,
             false,
-            MetricsUtils.Source.ACTION
+            MetricsUtils.Source.ACTION,
         )
 
         assertNotNull(Metrics.searchCount["custom.action"].testGetValue())
@@ -60,7 +60,7 @@ class MetricsUtilsTestRobolectric {
         MetricsUtils.recordSearchMetrics(
             engine,
             false,
-            MetricsUtils.Source.SHORTCUT
+            MetricsUtils.Source.SHORTCUT,
         )
 
         assertNotNull(Metrics.searchCount["custom.shortcut"].testGetValue())
@@ -78,7 +78,7 @@ class MetricsUtilsTestRobolectric {
         MetricsUtils.recordSearchMetrics(
             engine,
             false,
-            MetricsUtils.Source.SUGGESTION
+            MetricsUtils.Source.SUGGESTION,
         )
 
         assertNotNull(Metrics.searchCount["custom.suggestion"].testGetValue())
@@ -96,7 +96,7 @@ class MetricsUtilsTestRobolectric {
         MetricsUtils.recordSearchMetrics(
             engine,
             false,
-            MetricsUtils.Source.TOPSITE
+            MetricsUtils.Source.TOPSITE,
         )
 
         assertNotNull(Metrics.searchCount["custom.topsite"].testGetValue())
@@ -114,7 +114,7 @@ class MetricsUtilsTestRobolectric {
         MetricsUtils.recordSearchMetrics(
             engine,
             false,
-            MetricsUtils.Source.WIDGET
+            MetricsUtils.Source.WIDGET,
         )
 
         assertNotNull(Metrics.searchCount["custom.widget"].testGetValue())
@@ -132,7 +132,7 @@ class MetricsUtilsTestRobolectric {
         MetricsUtils.recordSearchMetrics(
             engine,
             false,
-            MetricsUtils.Source.ACTION
+            MetricsUtils.Source.ACTION,
         )
 
         assertNotNull(Metrics.searchCount["$ENGINE_SOURCE_IDENTIFIER.action"].testGetValue())
@@ -150,7 +150,7 @@ class MetricsUtilsTestRobolectric {
         MetricsUtils.recordSearchMetrics(
             engine,
             false,
-            MetricsUtils.Source.TOPSITE
+            MetricsUtils.Source.TOPSITE,
         )
 
         assertNotNull(Metrics.searchCount["$ENGINE_SOURCE_IDENTIFIER.topsite"].testGetValue())
@@ -168,7 +168,7 @@ class MetricsUtilsTestRobolectric {
         MetricsUtils.recordSearchMetrics(
             engine,
             false,
-            MetricsUtils.Source.SHORTCUT
+            MetricsUtils.Source.SHORTCUT,
         )
 
         assertNotNull(Metrics.searchCount["$ENGINE_SOURCE_IDENTIFIER.shortcut"].testGetValue())
@@ -186,7 +186,7 @@ class MetricsUtilsTestRobolectric {
         MetricsUtils.recordSearchMetrics(
             engine,
             false,
-            MetricsUtils.Source.SUGGESTION
+            MetricsUtils.Source.SUGGESTION,
         )
 
         assertNotNull(Metrics.searchCount["$ENGINE_SOURCE_IDENTIFIER.suggestion"].testGetValue())
@@ -204,10 +204,29 @@ class MetricsUtilsTestRobolectric {
         MetricsUtils.recordSearchMetrics(
             engine,
             false,
-            MetricsUtils.Source.WIDGET
+            MetricsUtils.Source.WIDGET,
         )
 
         assertNotNull(Metrics.searchCount["$ENGINE_SOURCE_IDENTIFIER.widget"].testGetValue())
+    }
+
+    @Test
+    fun `given a BUNDLED engine with an uppercase id, when recording a new search with that engine then record using lowercase`() {
+        val searchEngineId = "Uppercase-Id"
+        assertNull(Metrics.searchCount["$searchEngineId.widget"].testGetValue())
+
+        val engine: SearchEngine = mockk(relaxed = true)
+
+        every { engine.id } returns searchEngineId
+        every { engine.type } returns SearchEngine.Type.BUNDLED
+
+        MetricsUtils.recordSearchMetrics(
+            engine,
+            false,
+            MetricsUtils.Source.WIDGET,
+        )
+
+        assertNotNull(Metrics.searchCount["${searchEngineId.lowercase()}.widget"].testGetValue())
     }
 
     @Test
@@ -222,7 +241,7 @@ class MetricsUtilsTestRobolectric {
         MetricsUtils.recordSearchMetrics(
             engine,
             true,
-            MetricsUtils.Source.WIDGET
+            MetricsUtils.Source.WIDGET,
         )
 
         assertNotNull(Events.performedSearch.testGetValue())
@@ -243,7 +262,7 @@ class MetricsUtilsTestRobolectric {
         MetricsUtils.recordSearchMetrics(
             engine,
             false,
-            MetricsUtils.Source.WIDGET
+            MetricsUtils.Source.WIDGET,
         )
 
         assertNotNull(Events.performedSearch.testGetValue())

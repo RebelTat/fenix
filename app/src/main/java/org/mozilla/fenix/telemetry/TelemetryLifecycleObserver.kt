@@ -10,7 +10,7 @@ import androidx.lifecycle.LifecycleOwner
 import mozilla.components.browser.state.store.BrowserStore
 import mozilla.components.support.base.android.Clock
 import org.mozilla.fenix.GleanMetrics.EngineTab as EngineMetrics
-import org.mozilla.fenix.GleanMetrics.EngineTab.foregroundMetricsKeys as MetricsKeys
+import org.mozilla.fenix.GleanMetrics.EngineTab.ForegroundMetricsExtra as MetricsExtra
 
 /**
  * [LifecycleObserver] to used on the process lifecycle to measure the amount of tabs getting killed
@@ -21,7 +21,7 @@ import org.mozilla.fenix.GleanMetrics.EngineTab.foregroundMetricsKeys as Metrics
  * - https://github.com/mozilla-mobile/android-components/issues/9997
  */
 class TelemetryLifecycleObserver(
-    private val store: BrowserStore
+    private val store: BrowserStore,
 ) : DefaultLifecycleObserver {
     private var pausedState: TabState? = null
 
@@ -33,18 +33,16 @@ class TelemetryLifecycleObserver(
         val lastState = pausedState ?: return
         val currentState = createTabState()
 
-        @Suppress("DEPRECATION")
-        // FIXME(#19967): Migrate to non-deprecated API.
         EngineMetrics.foregroundMetrics.record(
-            mapOf(
-                MetricsKeys.backgroundActiveTabs to lastState.activeEngineTabs.toString(),
-                MetricsKeys.backgroundCrashedTabs to lastState.crashedTabs.toString(),
-                MetricsKeys.backgroundTotalTabs to lastState.totalTabs.toString(),
-                MetricsKeys.foregroundActiveTabs to currentState.activeEngineTabs.toString(),
-                MetricsKeys.foregroundCrashedTabs to currentState.crashedTabs.toString(),
-                MetricsKeys.foregroundTotalTabs to currentState.totalTabs.toString(),
-                MetricsKeys.timeInBackground to (currentState.timestamp - lastState.timestamp).toString()
-            )
+            MetricsExtra(
+                backgroundActiveTabs = lastState.activeEngineTabs.toString(),
+                backgroundCrashedTabs = lastState.crashedTabs.toString(),
+                backgroundTotalTabs = lastState.totalTabs.toString(),
+                foregroundActiveTabs = currentState.activeEngineTabs.toString(),
+                foregroundCrashedTabs = currentState.crashedTabs.toString(),
+                foregroundTotalTabs = currentState.totalTabs.toString(),
+                timeInBackground = (currentState.timestamp - lastState.timestamp).toString(),
+            ),
         )
 
         pausedState = null
@@ -65,7 +63,7 @@ class TelemetryLifecycleObserver(
         return TabState(
             activeEngineTabs = tabsWithEngineSession,
             totalTabs = totalTabs,
-            crashedTabs = crashedTabs
+            crashedTabs = crashedTabs,
         )
     }
 
@@ -73,6 +71,6 @@ class TelemetryLifecycleObserver(
         val timestamp: Long = Clock.elapsedRealtime(),
         val totalTabs: Int,
         val crashedTabs: Int,
-        val activeEngineTabs: Int
+        val activeEngineTabs: Int,
     )
 }

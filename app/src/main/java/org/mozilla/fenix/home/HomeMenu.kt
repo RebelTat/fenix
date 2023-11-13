@@ -19,13 +19,16 @@ import mozilla.components.browser.menu.item.BrowserMenuDivider
 import mozilla.components.browser.menu.item.BrowserMenuHighlightableItem
 import mozilla.components.browser.menu.item.BrowserMenuImageSwitch
 import mozilla.components.browser.menu.item.BrowserMenuImageText
+import mozilla.components.browser.menu.item.SimpleBrowserMenuItem
 import mozilla.components.concept.sync.AccountObserver
 import mozilla.components.concept.sync.AuthType
 import mozilla.components.concept.sync.OAuthAccount
 import mozilla.components.support.ktx.android.content.getColorFromAttr
+import org.mozilla.fenix.Config
 import org.mozilla.fenix.R
 import org.mozilla.fenix.components.accounts.AccountState
 import org.mozilla.fenix.components.accounts.FenixAccountManager
+import org.mozilla.fenix.components.toolbar.BrowserMenuSignIn
 import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.ext.settings
 import org.mozilla.fenix.nimbus.FxNimbus
@@ -38,7 +41,7 @@ class HomeMenu(
     private val context: Context,
     private val onItemTapped: (Item) -> Unit = {},
     private val onMenuBuilderChanged: (BrowserMenuBuilder) -> Unit = {},
-    private val onHighlightPresent: (BrowserMenuHighlight) -> Unit = {}
+    private val onHighlightPresent: (BrowserMenuHighlight) -> Unit = {},
 ) {
     sealed class Item {
         object Bookmarks : Item()
@@ -46,6 +49,11 @@ class HomeMenu(
         object Downloads : Item()
         object Extensions : Item()
         data class SyncAccount(val accountState: AccountState) : Item()
+
+        /**
+         * A button item to open up the settings page of FxA, shown up in mozilla online builds.
+         */
+        object ManageAccountAndDevices : Item()
         object WhatsNew : Item()
         object Help : Item()
         object CustomizeHome : Item()
@@ -72,9 +80,9 @@ class HomeMenu(
             textColorResource = primaryTextColor,
             highlight = BrowserMenuHighlight.HighPriority(
                 backgroundTint = syncDisconnectedBackgroundColor,
-                canPropagate = false
+                canPropagate = false,
             ),
-            isHighlighted = { true }
+            isHighlighted = { true },
         ) {
             onItemTapped.invoke(Item.ReconnectSync)
         }
@@ -84,27 +92,22 @@ class HomeMenu(
         BrowserMenuImageText(
             context.getString(R.string.delete_browsing_data_on_quit_action),
             R.drawable.mozac_ic_quit,
-            primaryTextColor
+            primaryTextColor,
         ) {
             onItemTapped.invoke(Item.Quit)
         }
     }
 
-    private fun getSyncItemTitle(): String =
-        accountManager.accountProfileEmail ?: context.getString(R.string.sync_menu_sign_in)
-
-    private val syncSignInMenuItem = BrowserMenuImageText(
-        getSyncItemTitle(),
-        R.drawable.ic_synced_tabs,
-        primaryTextColor
-    ) {
-        onItemTapped.invoke(Item.SyncAccount(accountManager.accountState))
+    private fun syncSignInMenuItem(): BrowserMenuItem {
+        return BrowserMenuSignIn(primaryTextColor) {
+            onItemTapped.invoke(Item.SyncAccount(accountManager.accountState))
+        }
     }
 
     val desktopItem = BrowserMenuImageSwitch(
         imageResource = R.drawable.ic_desktop,
         label = context.getString(R.string.browser_menu_desktop_site),
-        initialState = { context.settings().openNextTabInDesktopMode }
+        initialState = { context.settings().openNextTabInDesktopMode },
     ) { checked ->
         onItemTapped.invoke(Item.DesktopMode(checked))
     }
@@ -116,7 +119,7 @@ class HomeMenu(
         val bookmarksItem = BrowserMenuImageText(
             context.getString(R.string.library_bookmarks),
             R.drawable.ic_bookmark_list,
-            primaryTextColor
+            primaryTextColor,
         ) {
             onItemTapped.invoke(Item.Bookmarks)
         }
@@ -124,7 +127,7 @@ class HomeMenu(
         val historyItem = BrowserMenuImageText(
             context.getString(R.string.library_history),
             R.drawable.ic_history,
-            primaryTextColor
+            primaryTextColor,
         ) {
             onItemTapped.invoke(Item.History)
         }
@@ -132,7 +135,7 @@ class HomeMenu(
         val downloadsItem = BrowserMenuImageText(
             context.getString(R.string.library_downloads),
             R.drawable.ic_download,
-            primaryTextColor
+            primaryTextColor,
         ) {
             onItemTapped.invoke(Item.Downloads)
         }
@@ -140,9 +143,16 @@ class HomeMenu(
         val extensionsItem = BrowserMenuImageText(
             context.getString(R.string.browser_menu_add_ons),
             R.drawable.ic_addons_extensions,
-            primaryTextColor
+            primaryTextColor,
         ) {
             onItemTapped.invoke(Item.Extensions)
+        }
+
+        val manageAccountAndDevicesItem = SimpleBrowserMenuItem(
+            context.getString(R.string.browser_menu_manage_account_and_devices),
+            textColorResource = primaryTextColor,
+        ) {
+            onItemTapped.invoke(Item.ManageAccountAndDevices)
         }
 
         val whatsNewItem = BrowserMenuHighlightableItem(
@@ -150,9 +160,9 @@ class HomeMenu(
             R.drawable.ic_whats_new,
             iconTintColorResource = primaryTextColor,
             highlight = BrowserMenuHighlight.LowPriority(
-                notificationTint = getColor(context, R.color.fx_mobile_icon_color_information)
+                notificationTint = getColor(context, R.color.fx_mobile_icon_color_information),
             ),
-            isHighlighted = { WhatsNew.shouldHighlightWhatsNew(context) }
+            isHighlighted = { WhatsNew.shouldHighlightWhatsNew(context) },
         ) {
             onItemTapped.invoke(Item.WhatsNew)
         }
@@ -160,7 +170,7 @@ class HomeMenu(
         val helpItem = BrowserMenuImageText(
             context.getString(R.string.browser_menu_help),
             R.drawable.mozac_ic_help,
-            primaryTextColor
+            primaryTextColor,
         ) {
             onItemTapped.invoke(Item.Help)
         }
@@ -168,7 +178,7 @@ class HomeMenu(
         val customizeHomeItem = BrowserMenuImageText(
             context.getString(R.string.browser_menu_customize_home_1),
             R.drawable.ic_customize,
-            primaryTextColor
+            primaryTextColor,
         ) {
             onItemTapped.invoke(Item.CustomizeHome)
         }
@@ -178,7 +188,7 @@ class HomeMenu(
         val settingsItem = BrowserMenuImageText(
             nimbusValidation.settingsTitle,
             R.drawable.mozac_ic_settings,
-            primaryTextColor
+            primaryTextColor,
         ) {
             onItemTapped.invoke(Item.Settings)
         }
@@ -199,8 +209,9 @@ class HomeMenu(
             historyItem,
             downloadsItem,
             extensionsItem,
-            syncSignInMenuItem,
+            syncSignInMenuItem(),
             accountAuthItem,
+            if (Config.channel.isMozillaOnline) manageAccountAndDevicesItem else null,
             BrowserMenuDivider(),
             desktopItem,
             BrowserMenuDivider(),
@@ -208,7 +219,7 @@ class HomeMenu(
             helpItem,
             customizeHomeItem,
             settingsItem,
-            if (settings.shouldDeleteBrowsingDataOnQuit) quitItem else null
+            if (settings.shouldDeleteBrowsingDataOnQuit) quitItem else null,
         ).also { items ->
             items.getHighlight()?.let { onHighlightPresent(it) }
         }
@@ -234,8 +245,8 @@ class HomeMenu(
                         lifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
                             onMenuBuilderChanged(
                                 BrowserMenuBuilder(
-                                    menuItems
-                                )
+                                    menuItems,
+                                ),
                             )
                         }
                     }
@@ -244,8 +255,8 @@ class HomeMenu(
                         lifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
                             onMenuBuilderChanged(
                                 BrowserMenuBuilder(
-                                    menuItems
-                                )
+                                    menuItems,
+                                ),
                             )
                         }
                     }
@@ -254,13 +265,13 @@ class HomeMenu(
                         lifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
                             onMenuBuilderChanged(
                                 BrowserMenuBuilder(
-                                    menuItems
-                                )
+                                    menuItems,
+                                ),
                             )
                         }
                     }
                 },
-                lifecycleOwner
+                lifecycleOwner,
             )
         }
     }

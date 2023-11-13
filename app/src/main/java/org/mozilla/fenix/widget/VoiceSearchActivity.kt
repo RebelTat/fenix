@@ -9,8 +9,13 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.StrictMode
 import android.speech.RecognizerIntent
+import androidx.activity.result.ActivityResult
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import com.google.android.gms.common.util.VisibleForTesting
 import mozilla.components.support.locale.LocaleManager
+import mozilla.components.support.utils.ext.getParcelableCompat
 import mozilla.telemetry.glean.private.NoExtras
 import org.mozilla.fenix.GleanMetrics.SearchWidget
 import org.mozilla.fenix.HomeActivity
@@ -27,6 +32,24 @@ class VoiceSearchActivity : AppCompatActivity() {
      * so that it can persist through the speech activity.
      */
     private var previousIntent: Intent? = null
+    private lateinit var startForResult: ActivityResultLauncher<Intent>
+
+    @VisibleForTesting
+    internal fun handleActivityResult(result: ActivityResult) {
+        if (result.resultCode == RESULT_OK) {
+            val spokenText = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.first()
+            val context = this
+
+            previousIntent?.apply {
+                component = ComponentName(context, IntentReceiverActivity::class.java)
+                putExtra(SPEECH_PROCESSING, spokenText)
+                putExtra(HomeActivity.OPEN_TO_BROWSER_AND_LOAD, true)
+                startActivity(this)
+            }
+        }
+
+        finish()
+    }
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
@@ -36,13 +59,17 @@ class VoiceSearchActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        startForResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            handleActivityResult(it)
+        }
+
         if (Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).resolveActivity(packageManager) == null) {
             finish()
             return
         }
 
         // Retrieve the previous intent from the saved state
-        previousIntent = savedInstanceState?.get(PREVIOUS_INTENT) as Intent?
+        previousIntent = savedInstanceState?.getParcelableCompat(PREVIOUS_INTENT, Intent::class.java)
         if (previousIntent.isForSpeechProcessing()) {
             // Don't reopen the speech recognizer
             return
@@ -62,44 +89,22 @@ class VoiceSearchActivity : AppCompatActivity() {
     /**
      * Displays a speech recognizer popup that listens for input from the user.
      */
-    @Suppress("DEPRECATION")
-    // https://github.com/mozilla-mobile/fenix/issues/19919
     private fun displaySpeechRecognizer() {
         val intentSpeech = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(
                 RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
             )
             putExtra(
                 RecognizerIntent.EXTRA_LANGUAGE,
                 components.strictMode.resetAfter(StrictMode.allowThreadDiskReads()) {
                     LocaleManager.getCurrentLocale(this@VoiceSearchActivity)
-                }
+                },
             )
         }
         SearchWidget.voiceButton.record(NoExtras())
 
-        startActivityForResult(intentSpeech, SPEECH_REQUEST_CODE)
-    }
-
-    @Suppress("DEPRECATION")
-    // https://github.com/mozilla-mobile/fenix/issues/19919
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-
-        if (requestCode == SPEECH_REQUEST_CODE && resultCode == RESULT_OK) {
-            val spokenText = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.first()
-            val context = this
-
-            previousIntent?.apply {
-                component = ComponentName(context, IntentReceiverActivity::class.java)
-                putExtra(SPEECH_PROCESSING, spokenText)
-                putExtra(HomeActivity.OPEN_TO_BROWSER_AND_LOAD, true)
-                startActivity(this)
-            }
-        }
-
-        finish()
+        startForResult.launch(intentSpeech)
     }
 
     /**
@@ -110,8 +115,8 @@ class VoiceSearchActivity : AppCompatActivity() {
         this?.getBooleanExtra(SPEECH_PROCESSING, false) == true
 
     companion object {
-        internal const val SPEECH_REQUEST_CODE = 0
         internal const val PREVIOUS_INTENT = "org.mozilla.fenix.previous_intent"
+
         /**
          * In [VoiceSearchActivity] activity, used to store if the speech processing should start.
          * In [IntentReceiverActivity] activity, used to store the search terms.

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
@@ -31,6 +32,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.Color
@@ -44,6 +46,9 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTag
+import androidx.compose.ui.semantics.testTagsAsResourceId
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
@@ -51,7 +56,6 @@ import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import mozilla.components.service.pocket.PocketStory
 import mozilla.components.service.pocket.PocketStory.PocketRecommendedStory
@@ -65,11 +69,12 @@ import org.mozilla.fenix.compose.ListItemTabLarge
 import org.mozilla.fenix.compose.ListItemTabLargePlaceholder
 import org.mozilla.fenix.compose.ListItemTabSurface
 import org.mozilla.fenix.compose.SelectableChip
+import org.mozilla.fenix.compose.SelectableChipColors
 import org.mozilla.fenix.compose.StaggeredHorizontalGrid
 import org.mozilla.fenix.compose.TabSubtitleWithInterdot
+import org.mozilla.fenix.compose.inComposePreview
 import org.mozilla.fenix.ext.settings
 import org.mozilla.fenix.theme.FirefoxTheme
-import org.mozilla.fenix.theme.Theme
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -97,29 +102,37 @@ private val placeholderStory = PocketRecommendedStory("", "", "", "", "", 0, 0)
  * Displays a single [PocketRecommendedStory].
  *
  * @param story The [PocketRecommendedStory] to be displayed.
+ * @param backgroundColor The background [Color] of the story.
  * @param onStoryClick Callback for when the user taps on this story.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun PocketStory(
     @PreviewParameter(PocketStoryProvider::class) story: PocketRecommendedStory,
+    backgroundColor: Color,
     onStoryClick: (PocketRecommendedStory) -> Unit,
 ) {
     val imageUrl = story.imageUrl.replace(
         "{wh}",
-        with(LocalDensity.current) { "${116.dp.toPx().roundToInt()}x${84.dp.toPx().roundToInt()}" }
+        with(LocalDensity.current) { "${116.dp.toPx().roundToInt()}x${84.dp.toPx().roundToInt()}" },
     )
     val isValidPublisher = story.publisher.isNotBlank()
     val isValidTimeToRead = story.timeToRead >= 0
     ListItemTabLarge(
         imageUrl = imageUrl,
+        backgroundColor = backgroundColor,
         onClick = { onStoryClick(story) },
         title = {
             Text(
                 text = story.title,
+                modifier = Modifier.semantics {
+                    testTagsAsResourceId = true
+                    testTag = "pocket.story.title"
+                },
                 color = FirefoxTheme.colors.textPrimary,
-                fontSize = 14.sp,
                 overflow = TextOverflow.Ellipsis,
                 maxLines = 2,
+                style = FirefoxTheme.typography.body2,
             )
         },
         subtitle = {
@@ -128,21 +141,29 @@ fun PocketStory(
             } else if (isValidPublisher) {
                 Text(
                     text = story.publisher,
+                    modifier = Modifier.semantics {
+                        testTagsAsResourceId = true
+                        testTag = "pocket.story.publisher"
+                    },
                     color = FirefoxTheme.colors.textSecondary,
-                    fontSize = 12.sp,
                     overflow = TextOverflow.Ellipsis,
                     maxLines = 1,
+                    style = FirefoxTheme.typography.caption,
                 )
             } else if (isValidTimeToRead) {
                 Text(
                     text = "${story.timeToRead} min",
+                    modifier = Modifier.semantics {
+                        testTagsAsResourceId = true
+                        testTag = "pocket.story.timeToRead"
+                    },
                     color = FirefoxTheme.colors.textSecondary,
-                    fontSize = 12.sp,
                     overflow = TextOverflow.Ellipsis,
                     maxLines = 1,
+                    style = FirefoxTheme.typography.caption,
                 )
             }
-        }
+        },
     )
 }
 
@@ -150,59 +171,70 @@ fun PocketStory(
  * Displays a single [PocketSponsoredStory].
  *
  * @param story The [PocketSponsoredStory] to be displayed.
+ * @param backgroundColor The background [Color] of the story.
  * @param onStoryClick Callback for when the user taps on this story.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun PocketSponsoredStory(
     story: PocketSponsoredStory,
-    onStoryClick: (PocketSponsoredStory) -> Unit
+    backgroundColor: Color,
+    onStoryClick: (PocketSponsoredStory) -> Unit,
 ) {
     val (imageWidth, imageHeight) = with(LocalDensity.current) {
         116.dp.toPx().roundToInt() to 84.dp.toPx().roundToInt()
     }
     val imageUrl = story.imageUrl.replace(
         "&resize=w[0-9]+-h[0-9]+".toRegex(),
-        "&resize=w$imageWidth-h$imageHeight"
+        "&resize=w$imageWidth-h$imageHeight",
     )
 
-    ListItemTabSurface(imageUrl, { onStoryClick(story) }) {
-        Text(
-            text = story.title,
-            color = FirefoxTheme.colors.textPrimary,
-            fontSize = 14.sp,
-            overflow = TextOverflow.Ellipsis,
-            maxLines = 2,
-        )
-
-        Spacer(Modifier.height(9.dp))
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                painter = painterResource(id = R.drawable.pocket_star_stroke),
-                contentDescription = null,
-                tint = FirefoxTheme.colors.iconSecondary,
+    ListItemTabSurface(
+        imageUrl = imageUrl,
+        contentPadding = PaddingValues(16.dp, 0.dp),
+        backgroundColor = backgroundColor,
+        onClick = { onStoryClick(story) },
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            Text(
+                text = story.title,
+                modifier = Modifier.semantics {
+                    testTagsAsResourceId = true
+                    testTag = "pocket.sponsoredStory.title"
+                },
+                color = FirefoxTheme.colors.textPrimary,
+                overflow = TextOverflow.Ellipsis,
+                maxLines = 2,
+                style = FirefoxTheme.typography.body2,
             )
-
-            Spacer(Modifier.width(8.dp))
 
             Text(
                 text = stringResource(R.string.pocket_stories_sponsor_indication),
+                modifier = Modifier.semantics {
+                    testTagsAsResourceId = true
+                    testTag = "pocket.sponsoredStory.identifier"
+                },
                 color = FirefoxTheme.colors.textSecondary,
-                fontSize = 12.sp,
                 overflow = TextOverflow.Ellipsis,
                 maxLines = 1,
+                style = FirefoxTheme.typography.caption,
+            )
+
+            Text(
+                text = story.sponsor,
+                modifier = Modifier.semantics {
+                    testTagsAsResourceId = true
+                    testTag = "pocket.sponsoredStory.sponsor"
+                },
+                color = FirefoxTheme.colors.textSecondary,
+                overflow = TextOverflow.Ellipsis,
+                maxLines = 1,
+                style = FirefoxTheme.typography.caption,
             )
         }
-
-        Spacer(Modifier.height(7.dp))
-
-        Text(
-            text = story.sponsor,
-            color = FirefoxTheme.colors.textSecondary,
-            fontSize = 12.sp,
-            overflow = TextOverflow.Ellipsis,
-            maxLines = 1,
-        )
     }
 }
 
@@ -214,17 +246,21 @@ fun PocketSponsoredStory(
  * @param stories The list of [PocketStory]ies to be displayed. Expect a list with 8 items.
  * @param contentPadding Dimension for padding the content after it has been clipped.
  * This space will be used for shadows and also content rendering when the list is scrolled.
+ * @param backgroundColor The background [Color] of each story.
  * @param onStoryShown Callback for when a certain story is visible to the user.
  * @param onStoryClicked Callback for when the user taps on a recommended story.
  * @param onDiscoverMoreClicked Callback for when the user taps an element which contains an
  */
+@OptIn(ExperimentalComposeUiApi::class)
+@Suppress("LongParameterList")
 @Composable
 fun PocketStories(
     @PreviewParameter(PocketStoryProvider::class) stories: List<PocketStory>,
     contentPadding: Dp,
+    backgroundColor: Color = FirefoxTheme.colors.layer2,
     onStoryShown: (PocketStory, Pair<Int, Int>) -> Unit,
     onStoryClicked: (PocketStory, Pair<Int, Int>) -> Unit,
-    onDiscoverMoreClicked: (String) -> Unit
+    onDiscoverMoreClicked: (String) -> Unit,
 ) {
     // Show stories in at most 3 rows but on any number of columns depending on the data received.
     val maxRowsNo = 3
@@ -234,34 +270,55 @@ fun PocketStories(
     val flingBehavior = EagerFlingBehavior(lazyRowState = listState)
 
     LazyRow(
+        modifier = Modifier.semantics {
+            testTagsAsResourceId = true
+            testTag = "pocket.stories"
+        },
         contentPadding = PaddingValues(horizontal = contentPadding),
         state = listState,
         flingBehavior = flingBehavior,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         itemsIndexed(storiesToShow) { columnIndex, columnItems ->
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 columnItems.forEachIndexed { rowIndex, story ->
-                    if (story == placeholderStory) {
-                        ListItemTabLargePlaceholder(stringResource(R.string.pocket_stories_placeholder_text)) {
-                            onDiscoverMoreClicked("https://getpocket.com/explore?$POCKET_FEATURE_UTM_KEY_VALUE")
-                        }
-                    } else if (story is PocketRecommendedStory) {
-                        PocketStory(story) {
-                            val uri = Uri.parse(story.url)
-                                .buildUpon()
-                                .appendQueryParameter(URI_PARAM_UTM_KEY, POCKET_STORIES_UTM_VALUE)
-                                .build().toString()
-                            onStoryClicked(it.copy(url = uri), rowIndex to columnIndex)
-                        }
-                    } else if (story is PocketSponsoredStory) {
-                        Box(
-                            modifier = Modifier.onShown(0.5f) {
-                                onStoryShown(story, rowIndex to columnIndex)
+                    Box(
+                        modifier = Modifier.semantics {
+                            testTagsAsResourceId = true
+                            testTag = when (story) {
+                                placeholderStory -> "pocket.discover.more.story"
+                                is PocketRecommendedStory -> "pocket.recommended.story"
+                                else -> "pocket.sponsored.story"
                             }
-                        ) {
-                            PocketSponsoredStory(story) {
-                                onStoryClicked(story, rowIndex to columnIndex)
+                        },
+                    ) {
+                        if (story == placeholderStory) {
+                            ListItemTabLargePlaceholder(stringResource(R.string.pocket_stories_placeholder_text)) {
+                                onDiscoverMoreClicked("https://getpocket.com/explore?$POCKET_FEATURE_UTM_KEY_VALUE")
+                            }
+                        } else if (story is PocketRecommendedStory) {
+                            PocketStory(
+                                story = story,
+                                backgroundColor = backgroundColor,
+                            ) {
+                                val uri = Uri.parse(story.url)
+                                    .buildUpon()
+                                    .appendQueryParameter(URI_PARAM_UTM_KEY, POCKET_STORIES_UTM_VALUE)
+                                    .build().toString()
+                                onStoryClicked(it.copy(url = uri), rowIndex to columnIndex)
+                            }
+                        } else if (story is PocketSponsoredStory) {
+                            Box(
+                                modifier = Modifier.onShown(0.5f) {
+                                    onStoryShown(story, rowIndex to columnIndex)
+                                },
+                            ) {
+                                PocketSponsoredStory(
+                                    story = story,
+                                    backgroundColor = backgroundColor,
+                                ) {
+                                    onStoryClicked(story, rowIndex to columnIndex)
+                                }
                             }
                         }
                     }
@@ -285,40 +342,44 @@ private fun Modifier.onShown(
     var lastVisibleCoordinates: LayoutCoordinates? = null
 
     return composed {
-        val context = LocalContext.current
-        var wasEventReported by remember { mutableStateOf(false) }
+        if (inComposePreview) {
+            Modifier
+        } else {
+            val context = LocalContext.current
+            var wasEventReported by remember { mutableStateOf(false) }
 
-        val toolbarHeight = context.resources.getDimensionPixelSize(R.dimen.browser_toolbar_height)
-        val isToolbarPlacedAtBottom = context.settings().shouldUseBottomToolbar
-        // Get a Rect of the entire screen minus system insets minus the toolbar
-        val screenBounds = Rect()
-            .apply { LocalView.current.getWindowVisibleDisplayFrame(this) }
-            .apply {
-                when (isToolbarPlacedAtBottom) {
-                    true -> bottom -= toolbarHeight
-                    false -> top += toolbarHeight
+            val toolbarHeight = context.resources.getDimensionPixelSize(R.dimen.browser_toolbar_height)
+            val isToolbarPlacedAtBottom = context.settings().shouldUseBottomToolbar
+            // Get a Rect of the entire screen minus system insets minus the toolbar
+            val screenBounds = Rect()
+                .apply { LocalView.current.getWindowVisibleDisplayFrame(this) }
+                .apply {
+                    when (isToolbarPlacedAtBottom) {
+                        true -> bottom -= toolbarHeight
+                        false -> top += toolbarHeight
+                    }
+                }
+
+            // In the event this composable starts as visible but then gets pushed offscreen
+            // before MINIMUM_TIME_TO_SETTLE_MS we will not report is as being visible.
+            // In the LaunchedEffect we add support for when the composable starts as visible and then
+            // it's position isn't changed after MINIMUM_TIME_TO_SETTLE_MS so it must be reported as visible.
+            LaunchedEffect(initialTime) {
+                delay(MINIMUM_TIME_TO_SETTLE_MS.toLong())
+                if (!wasEventReported && lastVisibleCoordinates?.isVisible(screenBounds, threshold) == true) {
+                    wasEventReported = true
+                    onVisible()
                 }
             }
 
-        // In the event this composable starts as visible but then gets pushed offscreen
-        // before MINIMUM_TIME_TO_SETTLE_MS we will not report is as being visible.
-        // In the LaunchedEffect we add support for when the composable starts as visible and then
-        // it's position isn't changed after MINIMUM_TIME_TO_SETTLE_MS so it must be reported as visible.
-        LaunchedEffect(initialTime) {
-            delay(MINIMUM_TIME_TO_SETTLE_MS.toLong())
-            if (!wasEventReported && lastVisibleCoordinates?.isVisible(screenBounds, threshold) == true) {
-                wasEventReported = true
-                onVisible()
-            }
-        }
-
-        onGloballyPositioned { coordinates ->
-            if (!wasEventReported && coordinates.isVisible(screenBounds, threshold)) {
-                if (System.currentTimeMillis() - initialTime > MINIMUM_TIME_TO_SETTLE_MS) {
-                    wasEventReported = true
-                    onVisible()
-                } else {
-                    lastVisibleCoordinates = coordinates
+            onGloballyPositioned { coordinates ->
+                if (!wasEventReported && coordinates.isVisible(screenBounds, threshold)) {
+                    if (System.currentTimeMillis() - initialTime > MINIMUM_TIME_TO_SETTLE_MS) {
+                        wasEventReported = true
+                        onVisible()
+                    } else {
+                        lastVisibleCoordinates = coordinates
+                    }
                 }
             }
         }
@@ -361,23 +422,44 @@ private fun Rect.getIntersectPercentage(realSize: IntSize, other: Rect): Float {
  *
  * @param categories The categories needed to be displayed.
  * @param selections List of categories currently selected.
- * @param onCategoryClick Callback for when the user taps a category.
  * @param modifier [Modifier] to be applied to the layout.
+ * @param categoryColors The color set defined by [SelectableChipColors] used to style Pocket categories.
+ * @param onCategoryClick Callback for when the user taps a category.
  */
+@OptIn(ExperimentalComposeUiApi::class)
+@Suppress("LongParameterList")
 @Composable
 fun PocketStoriesCategories(
     categories: List<PocketRecommendedStoriesCategory>,
     selections: List<PocketRecommendedStoriesSelectedCategory>,
+    modifier: Modifier = Modifier,
+    categoryColors: SelectableChipColors = SelectableChipColors.buildColors(),
     onCategoryClick: (PocketRecommendedStoriesCategory) -> Unit,
-    modifier: Modifier = Modifier
 ) {
-    Box(modifier = modifier) {
+    val selectableChipColors = SelectableChipColors(
+        selectedTextColor = categoryColors.selectedTextColor,
+        unselectedTextColor = categoryColors.unselectedTextColor,
+        selectedBackgroundColor = categoryColors.selectedBackgroundColor,
+        unselectedBackgroundColor = categoryColors.unselectedBackgroundColor,
+    )
+
+    Box(
+        modifier = modifier.semantics {
+            testTagsAsResourceId = true
+            testTag = "pocket.categories"
+        },
+    ) {
         StaggeredHorizontalGrid(
             horizontalItemsSpacing = 16.dp,
-            verticalItemsSpacing = 16.dp
+            verticalItemsSpacing = 16.dp,
         ) {
             categories.filter { it.name != POCKET_STORIES_DEFAULT_CATEGORY_NAME }.forEach { category ->
-                SelectableChip(category.name, selections.map { it.name }.contains(category.name)) {
+                SelectableChip(
+                    text = category.name,
+                    isSelected = selections.map { it.name }.contains(category.name),
+                    isSquare = true,
+                    selectableChipColors = selectableChipColors,
+                ) {
                     onCategoryClick(category)
                 }
             }
@@ -392,11 +474,16 @@ fun PocketStoriesCategories(
  * @param onLearnMoreClicked Callback invoked when the user clicks the "Learn more" link.
  * Contains the full URL for where the user should be navigated to.
  * @param modifier [Modifier] to be applied to the layout.
+ * @param textColor [Color] to be applied to the text.
+ * @param linkTextColor [Color] of the link text.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun PoweredByPocketHeader(
     onLearnMoreClicked: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    textColor: Color = FirefoxTheme.colors.textPrimary,
+    linkTextColor: Color = FirefoxTheme.colors.textAccent,
 ) {
     val link = stringResource(R.string.pocket_stories_feature_learn_more)
     val text = stringResource(R.string.pocket_stories_feature_caption, link)
@@ -404,39 +491,59 @@ fun PoweredByPocketHeader(
     val linkEndIndex = linkStartIndex + link.length
 
     Column(
-        modifier = modifier,
+        modifier = modifier.semantics {
+            testTagsAsResourceId = true
+            testTag = "pocket.header"
+        },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Row(
             Modifier
                 .fillMaxWidth()
                 .semantics(mergeDescendants = true) {},
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
                 painter = painterResource(id = R.drawable.pocket_vector),
                 contentDescription = null,
                 // Apply the red tint in code. Otherwise the image is black and white.
-                tint = Color(0xFFEF4056)
+                tint = Color(0xFFEF4056),
             )
 
             Spacer(modifier = Modifier.width(16.dp))
 
             Column {
                 Text(
-                    text = stringResource(R.string.pocket_stories_feature_title),
-                    color = FirefoxTheme.colors.textPrimary,
-                    fontSize = 12.sp,
-                    lineHeight = 16.sp
+                    text = stringResource(
+                        R.string.pocket_stories_feature_title_2,
+                        LocalContext.current.getString(R.string.pocket_product_name),
+                    ),
+                    modifier = Modifier.semantics {
+                        testTagsAsResourceId = true
+                        testTag = "pocket.header.title"
+                    },
+                    color = textColor,
+                    style = FirefoxTheme.typography.caption,
                 )
 
-                ClickableSubstringLink(
-                    text = text,
-                    textColor = FirefoxTheme.colors.textPrimary,
-                    clickableStartIndex = linkStartIndex,
-                    clickableEndIndex = linkEndIndex
+                Box(
+                    modifier = modifier.semantics {
+                        testTagsAsResourceId = true
+                        testTag = "pocket.header.subtitle"
+                    },
                 ) {
-                    onLearnMoreClicked("https://www.mozilla.org/en-US/firefox/pocket/?$POCKET_FEATURE_UTM_KEY_VALUE")
+                    ClickableSubstringLink(
+                        text = text,
+                        textColor = textColor,
+                        linkTextColor = linkTextColor,
+                        linkTextDecoration = TextDecoration.Underline,
+                        clickableStartIndex = linkStartIndex,
+                        clickableEndIndex = linkEndIndex,
+                    ) {
+                        onLearnMoreClicked(
+                            "https://www.mozilla.org/en-US/firefox/pocket/?$POCKET_FEATURE_UTM_KEY_VALUE",
+                        )
+                    }
                 }
             }
         }
@@ -446,7 +553,7 @@ fun PoweredByPocketHeader(
 @Composable
 @Preview
 private fun PocketStoriesComposablesPreview() {
-    FirefoxTheme(theme = Theme.getTheme(isPrivate = false)) {
+    FirefoxTheme {
         Box(Modifier.background(FirefoxTheme.colors.layer2)) {
             Column {
                 PocketStories(
@@ -454,7 +561,7 @@ private fun PocketStoriesComposablesPreview() {
                     contentPadding = 0.dp,
                     onStoryShown = { _, _ -> },
                     onStoryClicked = { _, _ -> },
-                    onDiscoverMoreClicked = {}
+                    onDiscoverMoreClicked = {},
                 )
                 Spacer(Modifier.height(10.dp))
 
@@ -463,12 +570,12 @@ private fun PocketStoriesComposablesPreview() {
                         .split(" ")
                         .map { PocketRecommendedStoriesCategory(it) },
                     selections = emptyList(),
-                    onCategoryClick = {}
+                    onCategoryClick = {},
                 )
                 Spacer(Modifier.height(10.dp))
 
                 PoweredByPocketHeader(
-                    onLearnMoreClicked = {}
+                    onLearnMoreClicked = {},
                 )
             }
         }
@@ -492,8 +599,8 @@ internal fun getFakePocketStories(limit: Int = 1): List<PocketStory> {
                         imageUrl = "",
                         timeToRead = index,
                         category = "Category #$index",
-                        timesShown = index.toLong()
-                    )
+                        timesShown = index.toLong(),
+                    ),
                 )
                 false -> add(
                     PocketSponsoredStory(
@@ -508,8 +615,8 @@ internal fun getFakePocketStories(limit: Int = 1): List<PocketStory> {
                             flightCount = index,
                             flightPeriod = index * 2,
                             lifetimeCount = index * 3,
-                        )
-                    )
+                        ),
+                    ),
                 )
             }
         }

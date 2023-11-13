@@ -4,7 +4,8 @@
 
 package org.mozilla.fenix.widget
 
-import android.app.Activity
+import android.app.Activity.RESULT_CANCELED
+import android.app.Activity.RESULT_OK
 import android.content.ComponentName
 import android.content.Intent
 import android.content.IntentFilter
@@ -13,7 +14,7 @@ import android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH
 import android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL
 import android.speech.RecognizerIntent.EXTRA_RESULTS
 import android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
-import androidx.appcompat.app.AppCompatActivity.RESULT_OK
+import androidx.activity.result.ActivityResult
 import androidx.test.core.app.ApplicationProvider
 import io.mockk.every
 import io.mockk.mockk
@@ -33,7 +34,6 @@ import org.mozilla.fenix.helpers.FenixRobolectricTestRunner
 import org.mozilla.fenix.helpers.perf.TestStrictModeManager
 import org.mozilla.fenix.widget.VoiceSearchActivity.Companion.PREVIOUS_INTENT
 import org.mozilla.fenix.widget.VoiceSearchActivity.Companion.SPEECH_PROCESSING
-import org.mozilla.fenix.widget.VoiceSearchActivity.Companion.SPEECH_REQUEST_CODE
 import org.robolectric.Robolectric
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ActivityController
@@ -63,7 +63,7 @@ class VoiceSearchActivityTest {
         shadowPackageManager.addActivityIfNotPresent(component)
         shadowPackageManager.addIntentFilterForActivity(
             component,
-            IntentFilter(ACTION_RECOGNIZE_SPEECH).apply { addCategory(Intent.CATEGORY_DEFAULT) }
+            IntentFilter(ACTION_RECOGNIZE_SPEECH).apply { addCategory(Intent.CATEGORY_DEFAULT) },
         )
     }
 
@@ -75,11 +75,10 @@ class VoiceSearchActivityTest {
         controller.create()
 
         val intentForResult = shadow.peekNextStartedActivityForResult()
-        assertEquals(SPEECH_REQUEST_CODE, intentForResult.requestCode)
         assertEquals(ACTION_RECOGNIZE_SPEECH, intentForResult.intent.action)
         assertEquals(
             LANGUAGE_MODEL_FREE_FORM,
-            intentForResult.intent.getStringExtra(EXTRA_LANGUAGE_MODEL)
+            intentForResult.intent.getStringExtra(EXTRA_LANGUAGE_MODEL),
         )
     }
 
@@ -122,6 +121,7 @@ class VoiceSearchActivityTest {
         controller.create(savedInstanceState)
         controller.saveInstanceState(outState)
 
+        @Suppress("DEPRECATION")
         assertEquals(previousIntent, outState.getParcelable<Intent>(PREVIOUS_INTENT))
     }
 
@@ -141,6 +141,12 @@ class VoiceSearchActivityTest {
     }
 
     @Test
+    fun `handle no activity able to resolve voice intent`() {
+        controller.create()
+        assertTrue(activity.isFinishing)
+    }
+
+    @Test
     fun `handle speech result`() {
         every { testContext.components.analytics } returns mockk(relaxed = true)
         every { testContext.components.strictMode } returns TestStrictModeManager()
@@ -150,18 +156,15 @@ class VoiceSearchActivityTest {
         val resultIntent = Intent().apply {
             putStringArrayListExtra(EXTRA_RESULTS, arrayListOf("hello world"))
         }
-        shadow.receiveResult(
-            shadow.peekNextStartedActivityForResult().intent,
-            RESULT_OK,
-            resultIntent
-        )
+        val result = ActivityResult(RESULT_OK, resultIntent)
+        activity.handleActivityResult(result)
 
         val browserIntent = shadow.peekNextStartedActivity()
 
         assertTrue(activity.isFinishing)
         assertEquals(
             ComponentName(activity, IntentReceiverActivity::class.java),
-            browserIntent.component
+            browserIntent.component,
         )
         assertEquals("hello world", browserIntent.getStringExtra(SPEECH_PROCESSING))
         assertTrue(browserIntent.getBooleanExtra(OPEN_TO_BROWSER_AND_LOAD, false))
@@ -175,18 +178,9 @@ class VoiceSearchActivityTest {
         controller.create()
 
         val resultIntent = Intent()
-        shadow.receiveResult(
-            shadow.peekNextStartedActivityForResult().intent,
-            Activity.RESULT_CANCELED,
-            resultIntent
-        )
+        val result = ActivityResult(RESULT_CANCELED, resultIntent)
+        activity.handleActivityResult(result)
 
-        assertTrue(activity.isFinishing)
-    }
-
-    @Test
-    fun `handle no activity able to resolve voice intent`() {
-        controller.create()
         assertTrue(activity.isFinishing)
     }
 }

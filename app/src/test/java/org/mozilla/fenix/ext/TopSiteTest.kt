@@ -6,8 +6,6 @@ package org.mozilla.fenix.ext
 
 import mozilla.components.feature.top.sites.TopSite
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mozilla.fenix.helpers.FenixRobolectricTestRunner
@@ -20,7 +18,7 @@ class TopSiteTest {
         id = 1L,
         title = "Google",
         url = SupportUtils.GOOGLE_URL,
-        createdAt = 0
+        createdAt = 0,
     )
     val providedSite1 = TopSite.Provided(
         id = 3,
@@ -29,7 +27,7 @@ class TopSiteTest {
         clickUrl = "https://mozilla.com/click",
         imageUrl = "https://test.com/image2.jpg",
         impressionUrl = "https://example.com",
-        createdAt = 3
+        createdAt = 3,
     )
     val providedSite2 = TopSite.Provided(
         id = 3,
@@ -38,25 +36,25 @@ class TopSiteTest {
         clickUrl = "https://firefox.com/click",
         imageUrl = "https://test.com/image2.jpg",
         impressionUrl = "https://example.com",
-        createdAt = 3
+        createdAt = 3,
     )
     val pinnedSite1 = TopSite.Pinned(
         id = 1L,
         title = "DuckDuckGo",
         url = "https://duckduckgo.com",
-        createdAt = 0
+        createdAt = 0,
     )
     val pinnedSite2 = TopSite.Pinned(
         id = 1L,
         title = "Mozilla",
         url = "mozilla.org",
-        createdAt = 0
+        createdAt = 0,
     )
     val frecentSite = TopSite.Frecent(
         id = 1L,
         title = "Mozilla",
         url = "mozilla.org",
-        createdAt = 0
+        createdAt = 0,
     )
 
     @Test
@@ -67,7 +65,7 @@ class TopSiteTest {
             providedSite2,
             pinnedSite1,
             pinnedSite2,
-            frecentSite
+            frecentSite,
         )
 
         assertEquals(topSites.sort(), topSites)
@@ -81,7 +79,7 @@ class TopSiteTest {
             defaultGoogleTopSite,
             pinnedSite1,
             pinnedSite2,
-            frecentSite
+            frecentSite,
         )
         val expected = listOf(
             defaultGoogleTopSite,
@@ -89,7 +87,7 @@ class TopSiteTest {
             providedSite2,
             pinnedSite1,
             pinnedSite2,
-            frecentSite
+            frecentSite,
         )
 
         assertEquals(topSites.sort(), expected)
@@ -103,7 +101,7 @@ class TopSiteTest {
             pinnedSite1,
             pinnedSite2,
             frecentSite,
-            defaultGoogleTopSite
+            defaultGoogleTopSite,
         )
         val expected = listOf(
             defaultGoogleTopSite,
@@ -111,48 +109,9 @@ class TopSiteTest {
             providedSite2,
             pinnedSite1,
             pinnedSite2,
-            frecentSite
+            frecentSite,
         )
 
         assertEquals(topSites.sort(), expected)
-    }
-
-    @Test
-    fun `WHEN containsQueryParameters is invoked THEN the result should be true only if the url contains the search parameters`() {
-        var searchParameters = ""
-        val querySite = TopSite.Frecent(
-            id = 1L,
-            title = "Search",
-            url = "test.com/?q=value",
-            createdAt = 0
-        )
-        val blankQuerySite = TopSite.Frecent(
-            id = 1L,
-            title = "BlankSearch",
-            url = "test.com/?q=",
-            createdAt = 0
-        )
-
-        assertFalse(defaultGoogleTopSite.containsQueryParameters(searchParameters))
-        assertFalse(querySite.containsQueryParameters(searchParameters))
-        assertFalse(blankQuerySite.containsQueryParameters(searchParameters))
-
-        searchParameters = "q"
-
-        assertFalse(defaultGoogleTopSite.containsQueryParameters(searchParameters))
-        assertFalse(querySite.containsQueryParameters(searchParameters))
-        assertTrue(blankQuerySite.containsQueryParameters(searchParameters))
-
-        searchParameters = "q="
-
-        assertFalse(defaultGoogleTopSite.containsQueryParameters(searchParameters))
-        assertFalse(querySite.containsQueryParameters(searchParameters))
-        assertTrue(blankQuerySite.containsQueryParameters(searchParameters))
-
-        searchParameters = "q=value"
-
-        assertFalse(defaultGoogleTopSite.containsQueryParameters(searchParameters))
-        assertTrue(querySite.containsQueryParameters(searchParameters))
-        assertFalse(blankQuerySite.containsQueryParameters(searchParameters))
     }
 }

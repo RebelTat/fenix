@@ -6,21 +6,21 @@ package org.mozilla.fenix.components.toolbar
 
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import io.mockk.confirmVerified
-
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.spyk
 import io.mockk.verify
-import mozilla.components.support.test.robolectric.testContext
-import org.junit.Test
-import org.junit.runner.RunWith
 import mozilla.components.browser.toolbar.BrowserToolbar
 import mozilla.components.browser.toolbar.behavior.BrowserToolbarBehavior
 import mozilla.components.lib.publicsuffixlist.PublicSuffixList
+import mozilla.components.support.test.robolectric.testContext
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
 import org.mozilla.fenix.ext.components
+import org.mozilla.fenix.ext.settings
 import org.mozilla.fenix.helpers.FenixRobolectricTestRunner
 import org.mozilla.fenix.utils.Settings
 import mozilla.components.browser.toolbar.behavior.ToolbarPosition as MozacToolbarPosition
@@ -42,6 +42,7 @@ class BrowserToolbarViewTest {
         every { testContext.components.useCases } returns mockk(relaxed = true)
         every { testContext.components.core } returns mockk(relaxed = true)
         every { testContext.components.publicSuffixList } returns PublicSuffixList(testContext)
+        every { testContext.settings().showUnifiedSearchFeature } returns false
 
         toolbarView = BrowserToolbarView(
             context = testContext,
@@ -49,7 +50,7 @@ class BrowserToolbarViewTest {
             container = CoordinatorLayout(testContext),
             interactor = mockk(),
             customTabSession = mockk(relaxed = true),
-            lifecycleOwner = mockk()
+            lifecycleOwner = mockk(),
         )
 
         toolbarView.view = toolbar

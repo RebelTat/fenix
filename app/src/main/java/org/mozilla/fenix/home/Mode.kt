@@ -13,6 +13,7 @@ import org.mozilla.fenix.browser.browsingmode.BrowsingMode
 import org.mozilla.fenix.browser.browsingmode.BrowsingModeManager
 import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.onboarding.FenixOnboarding
+import org.mozilla.fenix.nimbus.Onboarding as OnboardingConfig
 
 /**
  * Describes various states of the home fragment UI.
@@ -20,7 +21,7 @@ import org.mozilla.fenix.onboarding.FenixOnboarding
 sealed class Mode {
     object Normal : Mode()
     object Private : Mode()
-    data class Onboarding(val state: OnboardingState) : Mode()
+    data class Onboarding(val state: OnboardingState, val config: OnboardingConfig) : Mode()
 
     companion object {
         fun fromBrowsingMode(browsingMode: BrowsingMode) = when (browsingMode) {
@@ -36,6 +37,7 @@ sealed class Mode {
 sealed class OnboardingState {
     // Signed out, without an option to auto-login using a shared FxA account.
     object SignedOutNoAutoSignIn : OnboardingState()
+
     // Signed in.
     object SignedIn : OnboardingState()
 }
@@ -44,7 +46,7 @@ class CurrentMode(
     private val context: Context,
     private val onboarding: FenixOnboarding,
     private val browsingModeManager: BrowsingModeManager,
-    private val dispatchModeChanges: (mode: Mode) -> Unit
+    private val dispatchModeChanges: (mode: Mode) -> Unit,
 ) : AccountObserver {
 
     private val accountManager by lazy { context.components.backgroundServices.accountManager }
@@ -54,9 +56,9 @@ class CurrentMode(
     } else {
         val account = accountManager.authenticatedAccount()
         if (account != null) {
-            Mode.Onboarding(OnboardingState.SignedIn)
+            Mode.Onboarding(OnboardingState.SignedIn, onboarding.config)
         } else {
-            Mode.Onboarding(OnboardingState.SignedOutNoAutoSignIn)
+            Mode.Onboarding(OnboardingState.SignedOutNoAutoSignIn, onboarding.config)
         }
     }
 

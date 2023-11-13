@@ -12,14 +12,11 @@ import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.intent.Intents
 import androidx.test.espresso.intent.matcher.IntentMatchers
-import androidx.test.espresso.matcher.RootMatchers.isDialog
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.withContentDescription
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.espresso.matcher.ViewMatchers.withText
-import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
-import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.UiSelector
 import androidx.test.uiautomator.Until
 import org.hamcrest.CoreMatchers
@@ -30,6 +27,7 @@ import org.mozilla.fenix.helpers.TestAssetHelper.waitingTime
 import org.mozilla.fenix.helpers.TestAssetHelper.waitingTimeLong
 import org.mozilla.fenix.helpers.TestHelper
 import org.mozilla.fenix.helpers.TestHelper.assertExternalAppOpens
+import org.mozilla.fenix.helpers.TestHelper.mDevice
 import org.mozilla.fenix.helpers.TestHelper.packageName
 import org.mozilla.fenix.helpers.click
 import org.mozilla.fenix.helpers.ext.waitNotNull
@@ -50,7 +48,7 @@ class DownloadRobot {
         assertTrue(
             "$fileName not found in Downloads list",
             mDevice.findObject(UiSelector().text(fileName))
-                .waitForExists(waitingTime)
+                .waitForExists(waitingTime),
         )
     }
 
@@ -66,7 +64,7 @@ class DownloadRobot {
         assertTrue(
             "Downloads list either empty or not displayed",
             mDevice.findObject(UiSelector().resourceId("$packageName:id/download_list"))
-                .waitForExists(waitingTime)
+                .waitForExists(waitingTime),
         )
 
     fun openDownloadedFile(fileName: String) {
@@ -83,6 +81,13 @@ class DownloadRobot {
             return Transition()
         }
 
+        fun closeCompletedDownloadPrompt(interact: BrowserRobot.() -> Unit): BrowserRobot.Transition {
+            closeCompletedDownloadButton().click()
+
+            BrowserRobot().interact()
+            return BrowserRobot.Transition()
+        }
+
         fun closePrompt(interact: BrowserRobot.() -> Unit): BrowserRobot.Transition {
             closePromptButton().click()
 
@@ -91,14 +96,15 @@ class DownloadRobot {
         }
 
         fun clickOpen(type: String, interact: BrowserRobot.() -> Unit): BrowserRobot.Transition {
+            openDownloadButton().waitForExists(waitingTime)
             openDownloadButton().click()
 
             // verify open intent is matched with associated data type
             Intents.intended(
                 CoreMatchers.allOf(
                     IntentMatchers.hasAction(Intent.ACTION_VIEW),
-                    IntentMatchers.hasType(type)
-                )
+                    IntentMatchers.hasType(type),
+                ),
             )
 
             BrowserRobot().interact()
@@ -106,11 +112,9 @@ class DownloadRobot {
         }
 
         fun clickAllowPermission(interact: DownloadRobot.() -> Unit): Transition {
-            val mDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
-
             mDevice.waitNotNull(
                 Until.findObject(By.res(TestHelper.getPermissionAllowID() + ":id/permission_allow_button")),
-                waitingTime
+                waitingTime,
             )
 
             val allowPermissionButton = mDevice.findObject(By.res(TestHelper.getPermissionAllowID() + ":id/permission_allow_button"))
@@ -125,6 +129,13 @@ class DownloadRobot {
 
             BrowserRobot().interact()
             return BrowserRobot.Transition()
+        }
+
+        fun goBack(interact: HomeScreenRobot.() -> Unit): HomeScreenRobot.Transition {
+            goBackButton().click()
+
+            HomeScreenRobot().interact()
+            return HomeScreenRobot.Transition()
         }
     }
 }
@@ -141,12 +152,12 @@ private fun assertDownloadPrompt(fileName: String) {
             assertTrue(
                 "Download prompt button not visible",
                 mDevice.findObject(UiSelector().resourceId("$packageName:id/download_button"))
-                    .waitForExists(waitingTimeLong)
+                    .waitForExists(waitingTimeLong),
             )
             assertTrue(
                 "$fileName title doesn't match",
                 mDevice.findObject(UiSelector().text(fileName))
-                    .waitForExists(waitingTimeLong)
+                    .waitForExists(waitingTimeLong),
             )
 
             break
@@ -164,31 +175,32 @@ private fun assertDownloadNotificationPopup() {
     assertTrue(
         "Download notification Open button not found",
         mDevice.findObject(UiSelector().text("Open"))
-            .waitForExists(waitingTime)
+            .waitForExists(waitingTime),
     )
     assertTrue(
         "Download completed notification text doesn't match",
         mDevice.findObject(UiSelector().textContains("Download completed"))
-            .waitForExists(waitingTime)
+            .waitForExists(waitingTime),
     )
     assertTrue(
         "Downloaded file name not visible",
         mDevice.findObject(UiSelector().resourceId("$packageName:id/download_dialog_filename"))
-            .waitForExists(waitingTime)
+            .waitForExists(waitingTime),
     )
 }
 
+private fun closeCompletedDownloadButton() =
+    onView(withId(R.id.download_dialog_close_button))
+
 private fun closePromptButton() =
-    onView(withContentDescription("Close"))
+    onView(withId(R.id.close_button))
 
 private fun downloadButton() =
-    onView(withText("Download"))
-        .inRoot(isDialog())
+    onView(withId(R.id.download_button))
         .check(matches(isDisplayed()))
 
 private fun openDownloadButton() =
-    onView(withId(R.id.download_dialog_action_button))
-        .check(matches(isDisplayed()))
+    mDevice.findObject(UiSelector().resourceId("$packageName:id/download_dialog_action_button"))
 
 private fun downloadedFile(fileName: String) = onView(withText(fileName))
 
@@ -196,5 +208,7 @@ private fun assertDownloadedFileIcon() =
     assertTrue(
         "Downloaded file icon not found",
         mDevice.findObject(UiSelector().resourceId("$packageName:id/favicon"))
-            .exists()
+            .exists(),
     )
+
+private fun goBackButton() = onView(withContentDescription("Navigate up"))

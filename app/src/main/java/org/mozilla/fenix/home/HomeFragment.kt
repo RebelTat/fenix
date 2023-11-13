@@ -5,16 +5,17 @@
 package org.mozilla.fenix.home
 
 import android.annotation.SuppressLint
+import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
+import android.net.Uri
 import android.os.Bundle
 import android.os.StrictMode
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewTreeObserver
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.PopupWindow
@@ -27,8 +28,9 @@ import androidx.constraintlayout.widget.ConstraintSet.PARENT_ID
 import androidx.constraintlayout.widget.ConstraintSet.TOP
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.toDrawable
+import androidx.core.view.isGone
 import androidx.core.view.isVisible
-import androidx.core.view.doOnPreDraw
 import androidx.core.view.updateLayoutParams
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
@@ -36,20 +38,30 @@ import androidx.lifecycle.Observer
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.LinearSmoothScroller
+import androidx.recyclerview.widget.RecyclerView.SmoothScroller
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Dispatchers.Main
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import mozilla.components.browser.menu.view.MenuButton
+import mozilla.components.browser.state.search.SearchEngine
 import mozilla.components.browser.state.selector.findTab
 import mozilla.components.browser.state.selector.normalTabs
 import mozilla.components.browser.state.selector.privateTabs
 import mozilla.components.browser.state.state.BrowserState
+import mozilla.components.browser.state.state.searchEngines
 import mozilla.components.browser.state.state.selectedOrDefaultSearchEngine
 import mozilla.components.browser.state.store.BrowserStore
+import mozilla.components.concept.menu.Orientation
+import mozilla.components.concept.menu.candidate.DrawableMenuIcon
+import mozilla.components.concept.menu.candidate.TextMenuCandidate
 import mozilla.components.concept.storage.FrecencyThresholdOption
 import mozilla.components.concept.sync.AccountObserver
 import mozilla.components.concept.sync.AuthType
@@ -65,32 +77,33 @@ import mozilla.components.service.glean.private.NoExtras
 import mozilla.components.support.base.feature.ViewBoundFeatureWrapper
 import mozilla.components.support.ktx.android.content.res.resolveAttribute
 import mozilla.components.support.ktx.kotlinx.coroutines.flow.ifChanged
-import mozilla.components.ui.tabcounter.TabCounterMenu
 import org.mozilla.fenix.Config
 import org.mozilla.fenix.GleanMetrics.Events
 import org.mozilla.fenix.GleanMetrics.HomeScreen
-import org.mozilla.fenix.GleanMetrics.StartOnHome
-import org.mozilla.fenix.GleanMetrics.Wallpapers
+import org.mozilla.fenix.GleanMetrics.UnifiedSearch
 import org.mozilla.fenix.HomeActivity
 import org.mozilla.fenix.R
+import org.mozilla.fenix.addons.showSnackBar
 import org.mozilla.fenix.browser.BrowserAnimator.Companion.getToolbarNavOptions
 import org.mozilla.fenix.browser.browsingmode.BrowsingMode
 import org.mozilla.fenix.components.FenixSnackbar
 import org.mozilla.fenix.components.PrivateShortcutCreateManager
 import org.mozilla.fenix.components.TabCollectionStorage
 import org.mozilla.fenix.components.appstate.AppAction
-import org.mozilla.fenix.components.toolbar.FenixTabCounterMenu
 import org.mozilla.fenix.components.toolbar.ToolbarPosition
 import org.mozilla.fenix.databinding.FragmentHomeBinding
 import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.ext.containsQueryParameters
 import org.mozilla.fenix.ext.hideToolbar
+import org.mozilla.fenix.ext.increaseTapArea
 import org.mozilla.fenix.ext.nav
 import org.mozilla.fenix.ext.requireComponents
 import org.mozilla.fenix.ext.runIfFragmentIsAttached
+import org.mozilla.fenix.ext.scaleToBottomOfView
 import org.mozilla.fenix.ext.settings
 import org.mozilla.fenix.gleanplumb.DefaultMessageController
 import org.mozilla.fenix.gleanplumb.MessagingFeature
+import org.mozilla.fenix.gleanplumb.NimbusMessagingController
 import org.mozilla.fenix.home.mozonline.showPrivacyPopWindow
 import org.mozilla.fenix.home.pocket.DefaultPocketStoriesController
 import org.mozilla.fenix.home.pocket.PocketRecommendedStoriesCategory
@@ -105,24 +118,31 @@ import org.mozilla.fenix.home.recentvisits.controller.DefaultRecentVisitsControl
 import org.mozilla.fenix.home.sessioncontrol.DefaultSessionControlController
 import org.mozilla.fenix.home.sessioncontrol.SessionControlInteractor
 import org.mozilla.fenix.home.sessioncontrol.SessionControlView
+import org.mozilla.fenix.home.sessioncontrol.viewholders.CollectionHeaderViewHolder
 import org.mozilla.fenix.home.topsites.DefaultTopSitesView
 import org.mozilla.fenix.nimbus.FxNimbus
 import org.mozilla.fenix.onboarding.FenixOnboarding
 import org.mozilla.fenix.perf.MarkersFragmentLifecycleCallbacks
+import org.mozilla.fenix.perf.runBlockingIncrement
+import org.mozilla.fenix.search.toolbar.SearchSelectorMenu
 import org.mozilla.fenix.tabstray.TabsTrayAccessPoint
 import org.mozilla.fenix.utils.Settings.Companion.TOP_SITES_PROVIDER_MAX_THRESHOLD
 import org.mozilla.fenix.utils.ToolbarPopupWindow
 import org.mozilla.fenix.utils.allowUndo
-import org.mozilla.fenix.wallpapers.WallpaperManager
+import org.mozilla.fenix.wallpapers.Wallpaper
 import java.lang.ref.WeakReference
 import kotlin.math.min
 
 @Suppress("TooManyFunctions", "LargeClass")
 class HomeFragment : Fragment() {
     private val args by navArgs<HomeFragmentArgs>()
-    private lateinit var bundleArgs: Bundle
 
-    private var _binding: FragmentHomeBinding? = null
+    @VisibleForTesting
+    internal lateinit var bundleArgs: Bundle
+
+    @VisibleForTesting
+    @Suppress("VariableNaming")
+    internal var _binding: FragmentHomeBinding? = null
     private val binding get() = _binding!!
 
     private val homeViewModel: HomeScreenViewModel by activityViewModels()
@@ -132,6 +152,13 @@ class HomeFragment : Fragment() {
             ToolbarPosition.BOTTOM -> binding.toolbarLayout
             ToolbarPosition.TOP -> null
         }
+
+    private val searchSelectorMenu by lazy {
+        SearchSelectorMenu(
+            context = requireContext(),
+            interactor = sessionControlInteractor,
+        )
+    }
 
     private val browsingModeManager get() = (activity as HomeActivity).browsingModeManager
 
@@ -154,16 +181,6 @@ class HomeFragment : Fragment() {
         }
     }
 
-    private val syncedTabFeature by lazy {
-        RecentSyncedTabFeature(
-            store = requireComponents.appStore,
-            context = requireContext(),
-            storage = requireComponents.backgroundServices.syncedTabsStorage,
-            accountManager = requireComponents.backgroundServices.accountManager,
-            lifecycleOwner = viewLifecycleOwner,
-        )
-    }
-
     private var _sessionControlInteractor: SessionControlInteractor? = null
     private val sessionControlInteractor: SessionControlInteractor
         get() = _sessionControlInteractor!!
@@ -171,6 +188,8 @@ class HomeFragment : Fragment() {
     private var sessionControlView: SessionControlView? = null
     private var appBarLayout: AppBarLayout? = null
     private lateinit var currentMode: CurrentMode
+
+    private var lastAppliedWallpaperName: String = Wallpaper.defaultName
 
     private val topSitesFeature = ViewBoundFeatureWrapper<TopSitesFeature>()
     private val messagingFeature = ViewBoundFeatureWrapper<MessagingFeature>()
@@ -199,7 +218,9 @@ class HomeFragment : Fragment() {
 
         // DO NOT MOVE ANYTHING BELOW THIS addMarker CALL!
         requireComponents.core.engine.profiler?.addMarker(
-            MarkersFragmentLifecycleCallbacks.MARKER_NAME, profilerStartTime, "HomeFragment.onCreate",
+            MarkersFragmentLifecycleCallbacks.MARKER_NAME,
+            profilerStartTime,
+            "HomeFragment.onCreate",
         )
     }
 
@@ -207,7 +228,7 @@ class HomeFragment : Fragment() {
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
-        savedInstanceState: Bundle?
+        savedInstanceState: Bundle?,
     ): View {
         // DO NOT ADD ANYTHING ABOVE THIS getProfilerTime CALL!
         val profilerStartTime = requireComponents.core.engine.profiler?.getProfilerTime()
@@ -216,11 +237,14 @@ class HomeFragment : Fragment() {
         val activity = activity as HomeActivity
         val components = requireComponents
 
+        val currentWallpaperName = requireContext().settings().currentWallpaperName
+        applyWallpaper(wallpaperName = currentWallpaperName, orientationChange = false)
+
         currentMode = CurrentMode(
             requireContext(),
             onboarding,
             browsingModeManager,
-            ::dispatchModeChanges
+            ::dispatchModeChanges,
         )
 
         components.appStore.dispatch(AppAction.ModeChange(currentMode.getCurrentMode()))
@@ -236,8 +260,8 @@ class HomeFragment : Fragment() {
                 if (requireContext().settings().showPocketSponsoredStories) {
                     components.appStore.dispatch(
                         AppAction.PocketSponsoredStoriesChange(
-                            components.core.pocketStoriesService.getSponsoredStories()
-                        )
+                            components.core.pocketStoriesService.getSponsoredStories(),
+                        ),
                     )
                 }
             } else {
@@ -248,10 +272,10 @@ class HomeFragment : Fragment() {
         if (requireContext().settings().isExperimentationEnabled) {
             messagingFeature.set(
                 feature = MessagingFeature(
-                    store = requireComponents.appStore,
+                    appStore = requireComponents.appStore,
                 ),
                 owner = viewLifecycleOwner,
-                view = binding.root
+                view = binding.root,
             )
         }
 
@@ -259,14 +283,14 @@ class HomeFragment : Fragment() {
             topSitesFeature.set(
                 feature = TopSitesFeature(
                     view = DefaultTopSitesView(
-                        store = components.appStore,
-                        settings = components.settings
+                        appStore = components.appStore,
+                        settings = components.settings,
                     ),
                     storage = components.core.topSitesStorage,
-                    config = ::getTopSitesConfig
+                    config = ::getTopSitesConfig,
                 ),
                 owner = viewLifecycleOwner,
-                view = binding.root
+                view = binding.root,
             )
         }
 
@@ -274,17 +298,25 @@ class HomeFragment : Fragment() {
             recentTabsListFeature.set(
                 feature = RecentTabsListFeature(
                     browserStore = components.core.store,
-                    appStore = components.appStore
+                    appStore = components.appStore,
                 ),
                 owner = viewLifecycleOwner,
-                view = binding.root
+                view = binding.root,
             )
 
             if (requireContext().settings().enableTaskContinuityEnhancements) {
                 recentSyncedTabFeature.set(
-                    feature = syncedTabFeature,
+                    feature = RecentSyncedTabFeature(
+                        context = requireContext(),
+                        appStore = requireComponents.appStore,
+                        syncStore = requireComponents.backgroundServices.syncStore,
+                        storage = requireComponents.backgroundServices.syncedTabsStorage,
+                        accountManager = requireComponents.backgroundServices.accountManager,
+                        historyStorage = requireComponents.core.historyStorage,
+                        coroutineScope = viewLifecycleOwner.lifecycleScope,
+                    ),
                     owner = viewLifecycleOwner,
-                    view = binding.root
+                    view = binding.root,
                 )
             }
         }
@@ -296,10 +328,10 @@ class HomeFragment : Fragment() {
                     bookmarksUseCase = run {
                         requireContext().components.useCases.bookmarksUseCases
                     },
-                    scope = viewLifecycleOwner.lifecycleScope
+                    scope = viewLifecycleOwner.lifecycleScope,
                 ),
                 owner = viewLifecycleOwner,
-                view = binding.root
+                view = binding.root,
             )
         }
 
@@ -309,11 +341,32 @@ class HomeFragment : Fragment() {
                     appStore = components.appStore,
                     historyMetadataStorage = components.core.historyStorage,
                     historyHighlightsStorage = components.core.lazyHistoryStorage,
-                    scope = viewLifecycleOwner.lifecycleScope
+                    scope = viewLifecycleOwner.lifecycleScope,
                 ),
                 owner = viewLifecycleOwner,
-                view = binding.root
+                view = binding.root,
             )
+        }
+
+        requireContext().settings().showUnifiedSearchFeature.let {
+            binding.searchSelectorButton.isVisible = it
+            binding.searchEngineIcon.isGone = it
+        }
+
+        binding.searchSelectorButton.apply {
+            setOnClickListener {
+                val orientation = if (context.settings().shouldUseBottomToolbar) {
+                    Orientation.UP
+                } else {
+                    Orientation.DOWN
+                }
+
+                UnifiedSearch.searchMenuTapped.record(NoExtras())
+                searchSelectorMenu.menuController.show(
+                    anchor = it.findViewById(R.id.search_selector),
+                    orientation = orientation,
+                )
+            }
         }
 
         _sessionControlInteractor = SessionControlInteractor(
@@ -323,7 +376,7 @@ class HomeFragment : Fragment() {
                 engine = components.core.engine,
                 messageController = DefaultMessageController(
                     appStore = components.appStore,
-                    messagingStorage = components.analytics.messagingStorage,
+                    messagingController = NimbusMessagingController(components.analytics.messagingStorage),
                     homeActivity = activity,
                 ),
                 store = store,
@@ -338,7 +391,7 @@ class HomeFragment : Fragment() {
                 hideOnboarding = ::hideOnboardingAndOpenSearch,
                 registerCollectionStorageObserver = ::registerCollectionStorageObserver,
                 removeCollectionWithUndo = ::removeCollectionWithUndo,
-                showTabTray = ::openTabsTray
+                showTabTray = ::openTabsTray,
             ),
             recentTabController = DefaultRecentTabsController(
                 selectTabUseCase = components.useCases.tabsUseCases.selectTab,
@@ -347,9 +400,10 @@ class HomeFragment : Fragment() {
                 appStore = components.appStore,
             ),
             recentSyncedTabController = DefaultRecentSyncedTabController(
-                addNewTabUseCase = requireComponents.useCases.tabsUseCases.addTab,
+                tabsUseCase = requireComponents.useCases.tabsUseCases,
                 navController = findNavController(),
                 accessPoint = TabsTrayAccessPoint.HomeRecentSyncedTab,
+                appStore = components.appStore,
             ),
             recentBookmarksController = DefaultRecentBookmarksController(
                 activity = activity,
@@ -367,15 +421,14 @@ class HomeFragment : Fragment() {
             pocketStoriesController = DefaultPocketStoriesController(
                 homeActivity = activity,
                 appStore = components.appStore,
-                navController = findNavController(),
-            )
+            ),
         )
 
         updateLayout(binding.root)
         sessionControlView = SessionControlView(
-            binding.sessionControlRecyclerView,
-            viewLifecycleOwner,
-            sessionControlInteractor
+            containerView = binding.sessionControlRecyclerView,
+            viewLifecycleOwner = viewLifecycleOwner,
+            interactor = sessionControlInteractor,
         )
 
         updateSessionControlView()
@@ -386,14 +439,11 @@ class HomeFragment : Fragment() {
 
         FxNimbus.features.homescreen.recordExposure()
 
-        displayWallpaperIfEnabled()
-
-        binding.root.doOnPreDraw {
-            requireComponents.appStore.dispatch(AppAction.UpdateFirstFrameDrawn(drawn = true))
-        }
         // DO NOT MOVE ANYTHING BELOW THIS addMarker CALL!
         requireComponents.core.engine.profiler?.addMarker(
-            MarkersFragmentLifecycleCallbacks.MARKER_NAME, profilerStartTime, "HomeFragment.onCreateView",
+            MarkersFragmentLifecycleCallbacks.MARKER_NAME,
+            profilerStartTime,
+            "HomeFragment.onCreateView",
         )
         return binding.root
     }
@@ -402,7 +452,9 @@ class HomeFragment : Fragment() {
         super.onConfigurationChanged(newConfig)
 
         getMenuButton()?.dismissMenu()
-        displayWallpaperIfEnabled()
+
+        val currentWallpaperName = requireContext().settings().currentWallpaperName
+        applyWallpaper(wallpaperName = currentWallpaperName, orientationChange = true)
     }
 
     /**
@@ -415,8 +467,8 @@ class HomeFragment : Fragment() {
         return TopSitesConfig(
             totalSites = settings.topSitesMaxLimit,
             frecencyConfig = TopSitesFrecencyConfig(
-                FrecencyThresholdOption.SKIP_ONE_TIME_PAGES
-            ) { !it.containsQueryParameters(settings.frecencyFilterQuery) },
+                FrecencyThresholdOption.SKIP_ONE_TIME_PAGES,
+            ) { !Uri.parse(it.url).containsQueryParameters(settings.frecencyFilterQuery) },
             providerConfig = TopSitesProviderConfig(
                 showProviderTopSites = settings.showContileFeature,
                 maxThreshold = TOP_SITES_PROVIDER_MAX_THRESHOLD,
@@ -426,8 +478,8 @@ class HomeFragment : Fragment() {
                         EBAY_SPONSORED_TITLE -> topSite.title != EBAY_SPONSORED_TITLE
                         else -> true
                     }
-                }
-            )
+                },
+            ),
         )
     }
 
@@ -456,7 +508,7 @@ class HomeFragment : Fragment() {
             ToolbarPosition.TOP -> {
                 binding.toolbarLayout.layoutParams = CoordinatorLayout.LayoutParams(
                     ConstraintLayout.LayoutParams.MATCH_PARENT,
-                    ConstraintLayout.LayoutParams.WRAP_CONTENT
+                    ConstraintLayout.LayoutParams.WRAP_CONTENT,
                 ).apply {
                     gravity = Gravity.TOP
                 }
@@ -473,7 +525,7 @@ class HomeFragment : Fragment() {
 
                 binding.bottomBar.background = AppCompatResources.getDrawable(
                     view.context,
-                    view.context.theme.resolveAttribute(R.attr.bottomBarBackgroundTop)
+                    view.context.theme.resolveAttribute(R.attr.bottomBarBackgroundTop),
                 )
 
                 binding.homeAppBar.updateLayoutParams<ViewGroup.MarginLayoutParams> {
@@ -497,6 +549,7 @@ class HomeFragment : Fragment() {
 
         observeSearchEngineChanges()
         observeSearchEngineNameChanges()
+        observeWallpaperUpdates()
 
         HomeMenuBuilder(
             view = view,
@@ -508,7 +561,12 @@ class HomeFragment : Fragment() {
             hideOnboardingIfNeeded = ::hideOnboardingIfNeeded,
         ).build()
 
-        createTabCounterMenu()
+        TabCounterBuilder(
+            context = requireContext(),
+            browsingModeManager = browsingModeManager,
+            navController = findNavController(),
+            tabCounter = binding.tabButton,
+        ).build()
 
         binding.toolbar.compoundDrawablePadding =
             view.resources.getDimensionPixelSize(R.dimen.search_bar_search_engine_icon_padding)
@@ -521,20 +579,15 @@ class HomeFragment : Fragment() {
                 WeakReference(it),
                 handlePasteAndGo = sessionControlInteractor::onPasteAndGo,
                 handlePaste = sessionControlInteractor::onPaste,
-                copyVisible = false
+                copyVisible = false,
             )
             true
-        }
-
-        binding.tabButton.setOnClickListener {
-            StartOnHome.openTabsTray.record(NoExtras())
-            openTabsTray()
         }
 
         PrivateBrowsingButtonView(binding.privateBrowsingButton, browsingModeManager) { newMode ->
             sessionControlInteractor.onPrivateModeButtonClicked(
                 newMode,
-                onboarding.userHasBeenOnboarded()
+                onboarding.userHasBeenOnboarded(),
             )
         }
 
@@ -556,12 +609,59 @@ class HomeFragment : Fragment() {
 
         if (bundleArgs.getBoolean(FOCUS_ON_ADDRESS_BAR)) {
             navigateToSearch()
+        } else if (bundleArgs.getBoolean(SCROLL_TO_COLLECTION)) {
+            MainScope().launch {
+                delay(ANIM_SCROLL_DELAY)
+                val smoothScroller: SmoothScroller =
+                    object : LinearSmoothScroller(sessionControlView!!.view.context) {
+                        override fun getVerticalSnapPreference(): Int {
+                            return SNAP_TO_START
+                        }
+                    }
+                val recyclerView = sessionControlView!!.view
+                val adapter = recyclerView.adapter!!
+                val collectionPosition = IntRange(0, adapter.itemCount - 1).firstOrNull {
+                    adapter.getItemViewType(it) == CollectionHeaderViewHolder.LAYOUT_ID
+                }
+                collectionPosition?.run {
+                    appBarLayout?.setExpanded(false)
+                    val linearLayoutManager = recyclerView.layoutManager as LinearLayoutManager
+                    smoothScroller.targetPosition = this
+                    linearLayoutManager.startSmoothScroll(smoothScroller)
+                }
+            }
+        }
+
+        consumeFlow(requireComponents.core.store) { flow ->
+            flow.map { state -> state.search }
+                .ifChanged()
+                .collect { search ->
+                    updateSearchSelectorMenu(search.searchEngines)
+                }
         }
 
         // DO NOT MOVE ANYTHING BELOW THIS addMarker CALL!
         requireComponents.core.engine.profiler?.addMarker(
-            MarkersFragmentLifecycleCallbacks.MARKER_NAME, profilerStartTime, "HomeFragment.onViewCreated",
+            MarkersFragmentLifecycleCallbacks.MARKER_NAME,
+            profilerStartTime,
+            "HomeFragment.onViewCreated",
         )
+    }
+
+    private fun updateSearchSelectorMenu(searchEngines: List<SearchEngine>) {
+        val searchEngineList = searchEngines
+            .map {
+                TextMenuCandidate(
+                    text = it.name,
+                    start = DrawableMenuIcon(
+                        drawable = it.icon.toDrawable(resources),
+                    ),
+                ) {
+                    sessionControlInteractor.onMenuItemTapped(SearchSelectorMenu.Item.SearchEngine(it))
+                }
+            }
+
+        searchSelectorMenu.menuController.submitList(searchSelectorMenu.menuItems(searchEngineList))
     }
 
     private fun observeSearchEngineChanges() {
@@ -569,15 +669,21 @@ class HomeFragment : Fragment() {
             flow.map { state -> state.search.selectedOrDefaultSearchEngine }
                 .ifChanged()
                 .collect { searchEngine ->
-                    if (searchEngine != null) {
+                    val name = searchEngine?.name
+                    val icon = searchEngine?.let {
+                        // Changing dimensions doesn't not affect the icon size, not sure what the
+                        // code is doing:  https://github.com/mozilla-mobile/fenix/issues/27763
                         val iconSize =
                             requireContext().resources.getDimensionPixelSize(R.dimen.preference_icon_drawable_size)
-                        val searchIcon =
-                            BitmapDrawable(requireContext().resources, searchEngine.icon)
-                        searchIcon.setBounds(0, 0, iconSize, iconSize)
-                        binding.searchEngineIcon.setImageDrawable(searchIcon)
+                        BitmapDrawable(requireContext().resources, searchEngine.icon).apply {
+                            setBounds(0, 0, iconSize, iconSize)
+                        }
+                    }
+
+                    if (requireContext().settings().showUnifiedSearchFeature) {
+                        binding.searchSelectorButton.setIcon(icon, name)
                     } else {
-                        binding.searchEngineIcon.setImageDrawable(null)
+                        binding.searchEngineIcon.setImageDrawable(icon)
                     }
                 }
         }
@@ -604,40 +710,6 @@ class HomeFragment : Fragment() {
         }
     }
 
-    private fun createTabCounterMenu() {
-        val browsingModeManager = (activity as HomeActivity).browsingModeManager
-        val mode = browsingModeManager.mode
-
-        val onItemTapped: (TabCounterMenu.Item) -> Unit = {
-            if (it is TabCounterMenu.Item.NewTab) {
-                browsingModeManager.mode = BrowsingMode.Normal
-            } else if (it is TabCounterMenu.Item.NewPrivateTab) {
-                browsingModeManager.mode = BrowsingMode.Private
-            }
-        }
-
-        val tabCounterMenu = FenixTabCounterMenu(
-            requireContext(),
-            onItemTapped,
-            iconColor = if (mode == BrowsingMode.Private) {
-                ContextCompat.getColor(requireContext(), R.color.fx_mobile_private_text_color_primary)
-            } else {
-                null
-            }
-        )
-
-        val inverseBrowsingMode = when (mode) {
-            BrowsingMode.Normal -> BrowsingMode.Private
-            BrowsingMode.Private -> BrowsingMode.Normal
-        }
-
-        tabCounterMenu.updateMenu(showOnly = inverseBrowsingMode)
-        binding.tabButton.setOnLongClickListener {
-            tabCounterMenu.menuController.show(anchor = it)
-            true
-        }
-    }
-
     private fun removeAllTabsAndShowSnackbar(sessionCode: String) {
         if (sessionCode == ALL_PRIVATE_TABS) {
             requireComponents.useCases.tabsUseCases.removePrivateTabs()
@@ -659,7 +731,7 @@ class HomeFragment : Fragment() {
                 requireComponents.useCases.tabsUseCases.undo.invoke()
             },
             operation = { },
-            anchorView = snackbarAnchorView
+            anchorView = snackbarAnchorView,
         )
     }
 
@@ -681,11 +753,11 @@ class HomeFragment : Fragment() {
             {
                 requireComponents.useCases.tabsUseCases.undo.invoke()
                 findNavController().navigate(
-                    HomeFragmentDirections.actionGlobalBrowser(null)
+                    HomeFragmentDirections.actionGlobalBrowser(null),
                 )
             },
             operation = { },
-            anchorView = snackbarAnchorView
+            anchorView = snackbarAnchorView,
         )
     }
 
@@ -697,6 +769,7 @@ class HomeFragment : Fragment() {
         appBarLayout = null
         _binding = null
         bundleArgs.clear()
+        lastAppliedWallpaperName = Wallpaper.defaultName
     }
 
     override fun onStart() {
@@ -714,7 +787,7 @@ class HomeFragment : Fragment() {
 
             requireComponents.backgroundServices.accountManager.register(
                 currentMode,
-                owner = this@HomeFragment.viewLifecycleOwner
+                owner = this@HomeFragment.viewLifecycleOwner,
             )
             requireComponents.backgroundServices.accountManager.register(
                 object : AccountObserver {
@@ -724,7 +797,7 @@ class HomeFragment : Fragment() {
                                 FenixSnackbar.make(
                                     view = it,
                                     duration = Snackbar.LENGTH_SHORT,
-                                    isDisplayedWithBrowserToolbar = false
+                                    isDisplayedWithBrowserToolbar = false,
                                 )
                                     .setText(it.context.getString(R.string.onboarding_firefox_account_sync_is_on))
                                     .setAnchorView(binding.toolbarLayout)
@@ -733,7 +806,7 @@ class HomeFragment : Fragment() {
                         }
                     }
                 },
-                owner = this@HomeFragment.viewLifecycleOwner
+                owner = this@HomeFragment.viewLifecycleOwner,
             )
         }
 
@@ -750,25 +823,6 @@ class HomeFragment : Fragment() {
 
         lifecycleScope.launch(IO) {
             requireComponents.reviewPromptController.promptReview(requireActivity())
-        }
-
-        if (shouldEnableWallpaper() && context.settings().wallpapersSwitchedByLogoTap) {
-            binding.wordmark.contentDescription =
-                context.getString(R.string.wallpaper_logo_content_description)
-            binding.wordmark.setOnClickListener {
-                val manager = requireComponents.wallpaperManager
-                val newWallpaper = manager.switchToNextWallpaper()
-                Wallpapers.wallpaperSwitched.record(
-                    Wallpapers.WallpaperSwitchedExtra(
-                        name = newWallpaper.name,
-                        themeCollection = newWallpaper::class.simpleName
-                    )
-                )
-                manager.updateWallpaper(
-                    wallpaperContainer = binding.wallpaperImageView,
-                    newWallpaper = newWallpaper
-                )
-            }
         }
     }
 
@@ -791,7 +845,7 @@ class HomeFragment : Fragment() {
             },
             operation = { },
             elevation = TOAST_ELEVATION,
-            anchorView = null
+            anchorView = null,
         )
 
         lifecycleScope.launch(IO) {
@@ -813,25 +867,6 @@ class HomeFragment : Fragment() {
         // triggered to cause an automatic update on warm start (no tab selection occurs). So we
         // update it manually here.
         requireComponents.useCases.sessionUseCases.updateLastAccess()
-        if (shouldAnimateLogoForWallpaper()) {
-            _binding?.sessionControlRecyclerView?.viewTreeObserver?.addOnGlobalLayoutListener(
-                homeLayoutListenerForLogoAnimation
-            )
-        }
-    }
-
-    // To try to find a good time to show the logo animation, we are waiting until all
-    // the sub-recyclerviews (recentBookmarks, collections, recentTabs,recentVisits
-    // and pocketStories) on the home screen have been layout.
-    private val homeLayoutListenerForLogoAnimation = object : ViewTreeObserver.OnGlobalLayoutListener {
-        override fun onGlobalLayout() {
-            _binding?.let { safeBindings ->
-                requireComponents.wallpaperManager.animateLogoIfNeeded(safeBindings.wordmark)
-                safeBindings.sessionControlRecyclerView.viewTreeObserver.removeOnGlobalLayoutListener(
-                    this
-                )
-            }
-        }
     }
 
     override fun onPause() {
@@ -841,9 +876,9 @@ class HomeFragment : Fragment() {
                 ColorDrawable(
                     ContextCompat.getColor(
                         requireContext(),
-                        R.color.fx_mobile_private_layer_color_1
-                    )
-                )
+                        R.color.fx_mobile_private_layer_color_1,
+                    ),
+                ),
             )
         }
 
@@ -862,12 +897,14 @@ class HomeFragment : Fragment() {
                     layout,
                     min(
                         (resources.displayMetrics.widthPixels / CFR_WIDTH_DIVIDER).toInt(),
-                        (resources.displayMetrics.heightPixels / CFR_WIDTH_DIVIDER).toInt()
+                        (resources.displayMetrics.heightPixels / CFR_WIDTH_DIVIDER).toInt(),
                     ),
                     LinearLayout.LayoutParams.WRAP_CONTENT,
-                    true
+                    true,
                 )
             layout.findViewById<Button>(R.id.cfr_pos_button).apply {
+                this.increaseTapArea(CFR_TAP_INCREASE_DPS)
+
                 setOnClickListener {
                     PrivateShortcutCreateManager.createPrivateShortcut(context)
                     privateBrowsingRecommend.dismiss()
@@ -885,7 +922,10 @@ class HomeFragment : Fragment() {
                     context.settings().showedPrivateModeContextualFeatureRecommender = true
                     context.settings().lastCfrShownTimeInMillis = System.currentTimeMillis()
                     privateBrowsingRecommend.showAsDropDown(
-                        binding.privateBrowsingButton, 0, CFR_Y_OFFSET, Gravity.TOP or Gravity.END
+                        binding.privateBrowsingButton,
+                        0,
+                        CFR_Y_OFFSET,
+                        Gravity.TOP or Gravity.END,
                     )
                 }
             }
@@ -897,8 +937,8 @@ class HomeFragment : Fragment() {
             onboarding.finish()
             requireContext().components.appStore.dispatch(
                 AppAction.ModeChange(
-                    mode = currentMode.getCurrentMode()
-                )
+                    mode = currentMode.getCurrentMode(),
+                ),
             )
         }
     }
@@ -913,7 +953,7 @@ class HomeFragment : Fragment() {
     internal fun navigateToSearch() {
         val directions =
             HomeFragmentDirections.actionGlobalSearchDialog(
-                sessionId = null
+                sessionId = null,
             )
 
         nav(R.id.homeFragment, directions, getToolbarNavOptions(requireContext()))
@@ -940,7 +980,7 @@ class HomeFragment : Fragment() {
             FenixSnackbar.make(
                 view = view,
                 duration = Snackbar.LENGTH_LONG,
-                isDisplayedWithBrowserToolbar = false
+                isDisplayedWithBrowserToolbar = false,
             )
                 .setText(string)
                 .setAnchorView(snackbarAnchorView)
@@ -951,7 +991,7 @@ class HomeFragment : Fragment() {
     private fun openTabsTray() {
         findNavController().nav(
             R.id.homeFragment,
-            HomeFragmentDirections.actionGlobalTabsTrayFragment()
+            HomeFragmentDirections.actionGlobalTabsTrayFragment(),
         )
     }
 
@@ -970,35 +1010,70 @@ class HomeFragment : Fragment() {
             ?.isVisible = tabCount > 0
     }
 
-    private fun displayWallpaperIfEnabled() {
-        if (shouldEnableWallpaper()) {
-            val wallpaperManger = requireComponents.wallpaperManager
-            // We only want to update the wallpaper when it's different from the default one
-            // as the default is applied already on xml by default.
-            if (wallpaperManger.currentWallpaper != WallpaperManager.defaultWallpaper) {
-                wallpaperManger.updateWallpaper(binding.wallpaperImageView, wallpaperManger.currentWallpaper)
+    @VisibleForTesting
+    internal fun shouldEnableWallpaper() =
+        (activity as? HomeActivity)?.themeManager?.currentTheme?.isPrivate?.not() ?: false
+
+    private fun applyWallpaper(wallpaperName: String, orientationChange: Boolean) {
+        when {
+            !shouldEnableWallpaper() ||
+                (wallpaperName == lastAppliedWallpaperName && !orientationChange) -> return
+            Wallpaper.nameIsDefault(wallpaperName) -> {
+                binding.wallpaperImageView.isVisible = false
+                lastAppliedWallpaperName = wallpaperName
+            }
+            else -> {
+                runBlockingIncrement {
+                    // loadBitmap does file lookups based on name, so we don't need a fully
+                    // qualified type to load the image
+                    val wallpaper = Wallpaper.Default.copy(name = wallpaperName)
+                    val wallpaperImage =
+                        requireComponents.useCases.wallpaperUseCases.loadBitmap(wallpaper)
+                    wallpaperImage?.let {
+                        it.scaleToBottomOfView(binding.wallpaperImageView)
+                        binding.wallpaperImageView.isVisible = true
+                        lastAppliedWallpaperName = wallpaperName
+                    } ?: run {
+                        with(binding.wallpaperImageView) {
+                            isVisible = false
+                            showSnackBar(
+                                view = this,
+                                text = resources.getString(R.string.wallpaper_select_error_snackbar_message),
+                            )
+                        }
+                        // If setting a wallpaper failed reset also the contrasting text color.
+                        requireContext().settings().currentWallpaperTextColor = 0L
+                        lastAppliedWallpaperName = Wallpaper.defaultName
+                    }
+                }
+            }
+        }
+        // Logo color should be updated in all cases.
+        applyWallpaperTextColor()
+    }
+
+    /**
+     * Apply a color better contrasting with the current wallpaper to the Fenix logo and private mode switcher.
+     */
+    @VisibleForTesting
+    internal fun applyWallpaperTextColor() {
+        val tintColor = when (val color = requireContext().settings().currentWallpaperTextColor.toInt()) {
+            0 -> null // a null ColorStateList will clear the current tint
+            else -> ColorStateList.valueOf(color)
+        }
+
+        binding.wordmarkText.imageTintList = tintColor
+        binding.privateBrowsingButton.imageTintList = tintColor
+    }
+
+    private fun observeWallpaperUpdates() {
+        consumeFrom(requireComponents.appStore) {
+            val currentWallpaper = it.wallpaperState.currentWallpaper
+            if (currentWallpaper.name != lastAppliedWallpaperName) {
+                applyWallpaper(wallpaperName = currentWallpaper.name, orientationChange = false)
             }
         }
     }
-
-    // We want to show the animation in a time when the user less distracted
-    // The Heuristics are:
-    // 1) The animation hasn't shown before.
-    // 2) The user has onboarded.
-    // 3) It's the third time the user enters the app.
-    // 4) The user is part of the right audience.
-    @Suppress("MagicNumber")
-    private fun shouldAnimateLogoForWallpaper(): Boolean {
-        val localContext = context ?: return false
-        val settings = localContext.settings()
-
-        return shouldEnableWallpaper() && settings.shouldAnimateFirefoxLogo &&
-            onboarding.userHasBeenOnboarded() &&
-            settings.numberOfAppLaunches >= 3
-    }
-
-    private fun shouldEnableWallpaper() =
-        (activity as? HomeActivity)?.themeManager?.currentTheme?.isPrivate?.not() ?: false
 
     companion object {
         const val ALL_NORMAL_TABS = "all_normal"
@@ -1006,8 +1081,13 @@ class HomeFragment : Fragment() {
 
         private const val FOCUS_ON_ADDRESS_BAR = "focusOnAddressBar"
 
+        private const val SCROLL_TO_COLLECTION = "scrollToCollection"
+        private const val ANIM_SCROLL_DELAY = 100L
+
         private const val CFR_WIDTH_DIVIDER = 1.7
         private const val CFR_Y_OFFSET = -20
+
+        private const val CFR_TAP_INCREASE_DPS = 6
 
         // Sponsored top sites titles and search engine names used for filtering
         const val AMAZON_SPONSORED_TITLE = "Amazon"
