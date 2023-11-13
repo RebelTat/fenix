@@ -5,15 +5,13 @@
 package org.mozilla.fenix.home.pocket
 
 import android.view.View
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.res.dimensionResource
@@ -27,9 +25,9 @@ import mozilla.components.service.pocket.PocketStory.PocketRecommendedStory
 import org.mozilla.fenix.R
 import org.mozilla.fenix.components.components
 import org.mozilla.fenix.compose.ComposeViewHolder
-import org.mozilla.fenix.compose.SectionHeader
+import org.mozilla.fenix.compose.home.HomeSectionHeader
 import org.mozilla.fenix.theme.FirefoxTheme
-import org.mozilla.fenix.theme.Theme
+import org.mozilla.fenix.wallpapers.WallpaperState
 
 /**
  * [RecyclerView.ViewHolder] for displaying the list of [PocketRecommendedStory]s from [AppStore].
@@ -41,7 +39,7 @@ import org.mozilla.fenix.theme.Theme
 class PocketStoriesViewHolder(
     composeView: ComposeView,
     viewLifecycleOwner: LifecycleOwner,
-    private val interactor: PocketStoriesInteractor
+    private val interactor: PocketStoriesInteractor,
 ) : ComposeViewHolder(composeView, viewLifecycleOwner) {
 
     companion object {
@@ -57,6 +55,9 @@ class PocketStoriesViewHolder(
 
         val stories = components.appStore
             .observeAsComposableState { state -> state.pocketStories }.value
+
+        val wallpaperState = components.appStore
+            .observeAsComposableState { state -> state.wallpaperState }.value ?: WallpaperState.default
 
         /* This was originally done to address this perf issue:
          * https://github.com/mozilla-mobile/fenix/issues/25545 for details.
@@ -79,22 +80,22 @@ class PocketStoriesViewHolder(
         }
 
         Column(modifier = Modifier.padding(top = 72.dp)) {
-            SectionHeader(
-                text = stringResource(R.string.pocket_stories_header_1),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = horizontalPadding)
-                    .wrapContentHeight(align = Alignment.Top)
-            )
+            // Simple wrapper to add horizontal padding to just the header while the stories have none.
+            Box(modifier = Modifier.padding(horizontal = horizontalPadding)) {
+                HomeSectionHeader(
+                    headerText = stringResource(R.string.pocket_stories_header_1),
+                )
+            }
 
             Spacer(Modifier.height(16.dp))
 
             PocketStories(
-                stories ?: emptyList(),
-                horizontalPadding,
-                interactor::onStoryShown,
-                interactor::onStoryClicked,
-                interactor::onDiscoverMoreClicked
+                stories = stories ?: emptyList(),
+                contentPadding = horizontalPadding,
+                backgroundColor = wallpaperState.wallpaperCardColor,
+                onStoryShown = interactor::onStoryShown,
+                onStoryClicked = interactor::onStoryClicked,
+                onDiscoverMoreClicked = interactor::onDiscoverMoreClicked,
             )
         }
     }
@@ -103,14 +104,10 @@ class PocketStoriesViewHolder(
 @Composable
 @Preview
 fun PocketStoriesViewHolderPreview() {
-    FirefoxTheme(theme = Theme.getTheme(isPrivate = false)) {
+    FirefoxTheme {
         Column {
-            SectionHeader(
-                text = stringResource(R.string.pocket_stories_header_1),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .wrapContentHeight(align = Alignment.Top)
+            HomeSectionHeader(
+                headerText = stringResource(R.string.pocket_stories_header_1),
             )
 
             Spacer(Modifier.height(16.dp))
@@ -119,9 +116,10 @@ fun PocketStoriesViewHolderPreview() {
             PocketStories(
                 stories = getFakePocketStories(8),
                 contentPadding = 0.dp,
+                backgroundColor = FirefoxTheme.colors.layer2,
                 onStoryShown = { _, _ -> },
                 onStoryClicked = { _, _ -> },
-                onDiscoverMoreClicked = {}
+                onDiscoverMoreClicked = {},
             )
         }
     }

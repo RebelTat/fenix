@@ -17,15 +17,16 @@ import kotlinx.coroutines.withContext
 import mozilla.components.concept.storage.Login
 import mozilla.components.concept.storage.LoginEntry
 import mozilla.components.service.sync.logins.InvalidRecordException
-import mozilla.components.service.sync.logins.LoginsStorageException
+import mozilla.components.service.sync.logins.LoginsApiException
 import mozilla.components.service.sync.logins.NoSuchRecordException
 import mozilla.components.service.sync.logins.SyncableLoginsStorage
 import org.mozilla.fenix.R
 import org.mozilla.fenix.settings.logins.LoginsAction
 import org.mozilla.fenix.settings.logins.LoginsFragmentStore
-import org.mozilla.fenix.settings.logins.fragment.EditLoginFragmentDirections
 import org.mozilla.fenix.settings.logins.fragment.AddLoginFragmentDirections
+import org.mozilla.fenix.settings.logins.fragment.EditLoginFragmentDirections
 import org.mozilla.fenix.settings.logins.mapToSavedLogin
+import org.mozilla.fenix.utils.ClipboardHandler
 
 /**
  * Controller for all saved logins interactions with the password storage component
@@ -36,7 +37,8 @@ open class SavedLoginsStorageController(
     private val lifecycleScope: CoroutineScope,
     private val navController: NavController,
     private val loginsFragmentStore: LoginsFragmentStore,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val clipboardHandler: ClipboardHandler,
 ) {
 
     fun delete(loginId: String) {
@@ -63,7 +65,7 @@ open class SavedLoginsStorageController(
         username = usernameText,
         password = passwordText,
         // Implicitly fill in httpRealm with the origin
-        httpRealm = originText
+        httpRealm = originText,
     )
 
     fun add(originText: String, usernameText: String, passwordText: String) {
@@ -90,10 +92,11 @@ open class SavedLoginsStorageController(
         try {
             val encryptedLogin = passwordsStorage.add(loginEntryToSave)
             syncAndUpdateList(passwordsStorage.decryptLogin(encryptedLogin))
-        } catch (loginException: LoginsStorageException) {
+        } catch (loginException: LoginsApiException) {
             Log.e(
                 "Add new login",
-                "Failed to add new login.", loginException
+                "Failed to add new login.",
+                loginException,
             )
         }
     }
@@ -123,7 +126,7 @@ open class SavedLoginsStorageController(
             withContext(Dispatchers.Main) {
                 val directions =
                     EditLoginFragmentDirections.actionEditLoginFragmentToLoginDetailFragment(
-                        loginId
+                        loginId,
                     )
                 navController.navigate(directions)
             }
@@ -139,18 +142,21 @@ open class SavedLoginsStorageController(
         try {
             val encryptedLogin = passwordsStorage.update(guid, loginEntryToSave)
             syncAndUpdateList(passwordsStorage.decryptLogin(encryptedLogin))
-        } catch (loginException: LoginsStorageException) {
+        } catch (loginException: LoginsApiException) {
             when (loginException) {
                 is NoSuchRecordException,
-                is InvalidRecordException -> {
+                is InvalidRecordException,
+                -> {
                     Log.e(
                         "Edit login",
-                        "Failed to save edited login.", loginException
+                        "Failed to save edited login.",
+                        loginException,
                     )
                 }
                 else -> Log.e(
                     "Edit login",
-                    "Failed to save edited login.", loginException
+                    "Failed to save edited login.",
+                    loginException,
                 )
             }
         }
@@ -160,15 +166,15 @@ open class SavedLoginsStorageController(
         val login = updatedLogin.mapToSavedLogin()
         loginsFragmentStore.dispatch(
             LoginsAction.UpdateLoginsList(
-                listOf(login)
-            )
+                listOf(login),
+            ),
         )
     }
 
     fun findDuplicateForAdd(originText: String, usernameText: String, passwordText: String) {
         lifecycleScope.launch(ioDispatcher) {
             findDuplicate(
-                loginEntryForAdd(originText, usernameText, passwordText)
+                loginEntryForAdd(originText, usernameText, passwordText),
             )
         }
     }
@@ -177,7 +183,7 @@ open class SavedLoginsStorageController(
         lifecycleScope.launch(ioDispatcher) {
             findDuplicate(
                 loginEntryForSave(loginId, usernameText, passwordText),
-                loginId
+                loginId,
             )
         }
     }
@@ -190,7 +196,7 @@ open class SavedLoginsStorageController(
         val validEntry = if (entry.password.isNotEmpty()) entry else entry.copy(password = "password")
         var dupe = try {
             passwordsStorage.findLoginToUpdate(validEntry)?.mapToSavedLogin()
-        } catch (e: LoginsStorageException) {
+        } catch (e: LoginsApiException) {
             // If the entry was invalid, then consider it not a dupe
             null
         }
@@ -207,8 +213,8 @@ open class SavedLoginsStorageController(
             if (fetchedLogin != null) {
                 loginsFragmentStore.dispatch(
                     LoginsAction.UpdateCurrentLogin(
-                        fetchedLogin.mapToSavedLogin()
-                    )
+                        fetchedLogin.mapToSavedLogin(),
+                    ),
                 )
             } else {
                 navController.popBackStack()
@@ -236,8 +242,8 @@ open class SavedLoginsStorageController(
                 withContext(Dispatchers.Main) {
                     loginsFragmentStore.dispatch(
                         LoginsAction.UpdateLoginsList(
-                            logins.map { it.mapToSavedLogin() }
-                        )
+                            logins.map { it.mapToSavedLogin() },
+                        ),
                     )
                 }
             }
@@ -247,5 +253,23 @@ open class SavedLoginsStorageController(
                 deferredLogins?.cancel()
             }
         }
+    }
+
+    /**
+     * Copy login username to clipboard
+     * @param loginId id of the login entry to copy username from
+     */
+    fun copyUsername(loginId: String) = lifecycleScope.launch {
+        val login = passwordsStorage.get(loginId)
+        clipboardHandler.text = login?.username
+    }
+
+    /**
+     * Copy login password to clipboard
+     * @param loginId id of the login entry to copy password from
+     */
+    fun copyPassword(loginId: String) = lifecycleScope.launch {
+        val login = passwordsStorage.get(loginId)
+        clipboardHandler.sensitiveText = login?.password
     }
 }

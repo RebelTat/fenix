@@ -19,12 +19,23 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
+    <!-- Needed for Google Play policy https://support.google.com/googleplay/android-developer/answer/6048248 -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID"/>
+
     <!-- Needed to prompt the user to give permission to install a downloaded apk -->
     <uses-permission-sdk-23 android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Needed to interact with all apps installed on a device -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
+
+    <!-- Needed to post notifications on devices with Android 13 and later-->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Needed for uploading media files on devices with Android 13 and later. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
 
     <application
         android:name=".FenixApplication"
@@ -269,6 +280,10 @@
             android:exported="false"
             android:theme="@style/DialogActivityTheme" />
 
+        <activity
+            android:name=".gleanplumb.NotificationClickedReceiverActivity"
+            android:exported="false" />
+
         <service
             android:name=".autofill.AutofillService"
             android:exported="true"
@@ -283,6 +298,7 @@
         </service>
 
         <service android:name=".media.MediaSessionService"
+            android:foregroundServiceType="mediaPlayback"
             android:exported="false" />
 
         <service
@@ -312,6 +328,10 @@
 
         <service android:name=".session.PrivateNotificationService"
                 android:exported="false" />
+
+        <service
+            android:name=".gleanplumb.NotificationDismissedService"
+            android:exported="false" />
 
         <service
             android:name=".push.FirebasePushService"

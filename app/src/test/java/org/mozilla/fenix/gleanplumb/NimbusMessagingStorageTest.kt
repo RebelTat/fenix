@@ -20,20 +20,19 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.mozilla.experiments.nimbus.GleanPlumbInterface
 import org.mozilla.experiments.nimbus.GleanPlumbMessageHelper
+import org.mozilla.experiments.nimbus.NullVariables
+import org.mozilla.experiments.nimbus.Res
 import org.mozilla.experiments.nimbus.internal.FeatureHolder
 import org.mozilla.experiments.nimbus.internal.NimbusException
-import org.mozilla.fenix.HomeActivity
 import org.mozilla.fenix.helpers.FenixRobolectricTestRunner
 import org.mozilla.fenix.nimbus.ControlMessageBehavior.SHOW_NEXT_MESSAGE
 import org.mozilla.fenix.nimbus.MessageData
+import org.mozilla.fenix.nimbus.MessageSurfaceId
 import org.mozilla.fenix.nimbus.Messaging
 import org.mozilla.fenix.nimbus.StyleData
 
 @RunWith(FenixRobolectricTestRunner::class)
 class NimbusMessagingStorageTest {
-
-    private val activity: HomeActivity = mockk(relaxed = true)
-    private val storageNimbus: NimbusMessagingStorage = mockk(relaxed = true)
     private lateinit var storage: NimbusMessagingStorage
     private lateinit var metadataStorage: MessageMetadataStorage
     private lateinit var gleanPlumb: GleanPlumbInterface
@@ -43,11 +42,13 @@ class NimbusMessagingStorageTest {
     private val reportMalformedMessage: (String) -> Unit = {
         malformedWasReported = true
     }
+
     @Before
     fun setup() {
         gleanPlumb = mockk(relaxed = true)
         metadataStorage = mockk(relaxed = true)
         malformedWasReported = false
+        NullVariables.instance.setContext(testContext)
         messagingFeature = createMessagingFeature()
 
         coEvery { metadataStorage.getMetadata() } returns mapOf("message-1" to Message.Metadata(id = "message-1"))
@@ -57,16 +58,19 @@ class NimbusMessagingStorageTest {
             metadataStorage,
             reportMalformedMessage,
             gleanPlumb,
-            messagingFeature
+            messagingFeature,
         )
     }
 
     @Test
-    fun `WHEN calling getMessages THEN provide a list of available messages`() = runTest {
-        val message = storage.getMessages().first()
+    fun `WHEN calling getMessages THEN provide a list of available messages for a given surface`() = runTest {
+        val homescreenMessage = storage.getMessages().first()
 
-        assertEquals("message-1", message.id)
-        assertEquals("message-1", message.metadata.id)
+        assertEquals("message-1", homescreenMessage.id)
+        assertEquals("message-1", homescreenMessage.metadata.id)
+
+        val notificationMessage = storage.getMessages().last()
+        assertEquals("message-2", notificationMessage.id)
     }
 
     @Test
@@ -80,18 +84,18 @@ class NimbusMessagingStorageTest {
             val styles = mapOf(
                 "high-priority" to createStyle(priority = 100),
                 "medium-priority" to createStyle(priority = 50),
-                "low-priority" to createStyle(priority = 1)
+                "low-priority" to createStyle(priority = 1),
             )
             val metadataStorage: MessageMetadataStorage = mockk(relaxed = true)
             val messagingFeature = createMessagingFeature(
                 styles = styles,
-                messages = messages
+                messages = messages,
             )
 
             coEvery { metadataStorage.getMetadata() } returns mapOf(
                 "message-1" to Message.Metadata(
-                    id = "message-1"
-                )
+                    id = "message-1",
+                ),
             )
 
             val storage = NimbusMessagingStorage(
@@ -99,7 +103,7 @@ class NimbusMessagingStorageTest {
                 metadataStorage,
                 reportMalformedMessage,
                 gleanPlumb,
-                messagingFeature
+                messagingFeature,
             )
 
             val results = storage.getMessages()
@@ -114,7 +118,7 @@ class NimbusMessagingStorageTest {
         runTest {
             val metadataList = mapOf(
                 "pressed-message" to Message.Metadata(id = "pressed-message", pressed = true),
-                "normal-message" to Message.Metadata(id = "normal-message", pressed = false)
+                "normal-message" to Message.Metadata(id = "normal-message", pressed = false),
             )
             val messages = mapOf(
                 "pressed-message" to createMessageData(style = "high-priority"),
@@ -126,7 +130,7 @@ class NimbusMessagingStorageTest {
             val metadataStorage: MessageMetadataStorage = mockk(relaxed = true)
             val messagingFeature = createMessagingFeature(
                 styles = styles,
-                messages = messages
+                messages = messages,
             )
 
             coEvery { metadataStorage.getMetadata() } returns metadataList
@@ -136,7 +140,7 @@ class NimbusMessagingStorageTest {
                 metadataStorage,
                 reportMalformedMessage,
                 gleanPlumb,
-                messagingFeature
+                messagingFeature,
             )
 
             val results = storage.getMessages()
@@ -150,7 +154,7 @@ class NimbusMessagingStorageTest {
         runTest {
             val metadataList = mapOf(
                 "dismissed-message" to Message.Metadata(id = "dismissed-message", dismissed = true),
-                "normal-message" to Message.Metadata(id = "normal-message", dismissed = false)
+                "normal-message" to Message.Metadata(id = "normal-message", dismissed = false),
             )
             val messages = mapOf(
                 "dismissed-message" to createMessageData(style = "high-priority"),
@@ -162,7 +166,7 @@ class NimbusMessagingStorageTest {
             val metadataStorage: MessageMetadataStorage = mockk(relaxed = true)
             val messagingFeature = createMessagingFeature(
                 styles = styles,
-                messages = messages
+                messages = messages,
             )
 
             coEvery { metadataStorage.getMetadata() } returns metadataList
@@ -172,7 +176,7 @@ class NimbusMessagingStorageTest {
                 metadataStorage,
                 reportMalformedMessage,
                 gleanPlumb,
-                messagingFeature
+                messagingFeature,
             )
 
             val results = storage.getMessages()
@@ -187,13 +191,13 @@ class NimbusMessagingStorageTest {
             val metadataList = mapOf(
                 "shown-many-times-message" to Message.Metadata(
                     id = "shown-many-times-message",
-                    displayCount = 10
+                    displayCount = 10,
                 ),
-                "normal-message" to Message.Metadata(id = "normal-message", displayCount = 0)
+                "normal-message" to Message.Metadata(id = "normal-message", displayCount = 0),
             )
             val messages = mapOf(
                 "shown-many-times-message" to createMessageData(
-                    style = "high-priority"
+                    style = "high-priority",
                 ),
                 "normal-message" to createMessageData(style = "high-priority"),
             )
@@ -203,7 +207,7 @@ class NimbusMessagingStorageTest {
             val metadataStorage: MessageMetadataStorage = mockk(relaxed = true)
             val messagingFeature = createMessagingFeature(
                 styles = styles,
-                messages = messages
+                messages = messages,
             )
 
             coEvery { metadataStorage.getMetadata() } returns metadataList
@@ -213,7 +217,7 @@ class NimbusMessagingStorageTest {
                 metadataStorage,
                 reportMalformedMessage,
                 gleanPlumb,
-                messagingFeature
+                messagingFeature,
             )
 
             val results = storage.getMessages()
@@ -229,7 +233,7 @@ class NimbusMessagingStorageTest {
 
         assertEquals("message-1", firstMessage.id)
         assertEquals("message-1", firstMessage.metadata.id)
-        assertTrue(messages.size == 1)
+        assertTrue(messages.size == 2)
         assertTrue(malformedWasReported)
     }
 
@@ -272,7 +276,6 @@ class NimbusMessagingStorageTest {
 
     @Test
     fun `WHEN calling updateMetadata THEN delegate to metadataStorage`() = runTest {
-
         storage.updateMetadata(mockk(relaxed = true))
 
         coEvery { metadataStorage.updateMetadata(any()) }
@@ -352,7 +355,7 @@ class NimbusMessagingStorageTest {
             action = "action",
             mockk(relaxed = true),
             emptyList(),
-            Message.Metadata("id")
+            Message.Metadata("id"),
         )
 
         val result = storage.isMessageUnderExperiment(message, null)
@@ -368,7 +371,7 @@ class NimbusMessagingStorageTest {
             action = "action",
             mockk(relaxed = true),
             emptyList(),
-            Message.Metadata("end-")
+            Message.Metadata("end-"),
         )
 
         val result = storage.isMessageUnderExperiment(message, "end-")
@@ -384,7 +387,7 @@ class NimbusMessagingStorageTest {
             action = "action",
             mockk(relaxed = true),
             emptyList(),
-            Message.Metadata("same-id")
+            Message.Metadata("same-id"),
         )
 
         val result = storage.isMessageUnderExperiment(message, "same-id")
@@ -401,7 +404,7 @@ class NimbusMessagingStorageTest {
             action = "action",
             mockk(relaxed = true),
             listOf("trigger"),
-            Message.Metadata("same-id")
+            Message.Metadata("same-id"),
         )
 
         every { helper.evalJexl(any()) } returns true
@@ -420,7 +423,7 @@ class NimbusMessagingStorageTest {
             action = "action",
             mockk(relaxed = true),
             listOf("trigger"),
-            Message.Metadata("same-id")
+            Message.Metadata("same-id"),
         )
 
         every { helper.evalJexl(any()) } throws NimbusException.EvaluationException("")
@@ -439,7 +442,7 @@ class NimbusMessagingStorageTest {
             action = "action",
             mockk(relaxed = true),
             listOf("trigger"),
-            Message.Metadata("same-id")
+            Message.Metadata("same-id"),
         )
 
         storage.malFormedMap["trigger"] = "same-id"
@@ -462,7 +465,7 @@ class NimbusMessagingStorageTest {
             action = "action",
             mockk(relaxed = true),
             listOf("trigger"),
-            Message.Metadata("same-id")
+            Message.Metadata("same-id"),
         )
 
         every { helper.evalJexl(any()) } throws NimbusException.EvaluationException("")
@@ -485,12 +488,12 @@ class NimbusMessagingStorageTest {
             action = "action",
             mockk(relaxed = true),
             listOf("trigger"),
-            Message.Metadata("same-id")
+            Message.Metadata("same-id"),
         )
 
         every { spiedStorage.isMessageEligible(any(), any()) } returns false
 
-        val result = spiedStorage.getNextMessage(listOf(message))
+        val result = spiedStorage.getNextMessage(MessageSurfaceId.HOMESCREEN, listOf(message))
 
         assertNull(result)
     }
@@ -500,17 +503,17 @@ class NimbusMessagingStorageTest {
         val spiedStorage = spyk(storage)
         val message = Message(
             "same-id",
-            mockk(relaxed = true),
+            createMessageData(surface = MessageSurfaceId.HOMESCREEN),
             action = "action",
             mockk(relaxed = true),
             listOf("trigger"),
-            Message.Metadata("same-id")
+            Message.Metadata("same-id"),
         )
 
         every { spiedStorage.isMessageEligible(any(), any()) } returns true
         every { spiedStorage.isMessageUnderExperiment(any(), any()) } returns false
 
-        val result = spiedStorage.getNextMessage(listOf(message))
+        val result = spiedStorage.getNextMessage(MessageSurfaceId.HOMESCREEN, listOf(message))
 
         assertEquals(message.id, result!!.id)
     }
@@ -518,9 +521,7 @@ class NimbusMessagingStorageTest {
     @Test
     fun `GIVEN a message under experiment WHEN calling getNextMessage THEN call recordExposure`() {
         val spiedStorage = spyk(storage)
-        val messageData: MessageData = mockk(relaxed = true)
-
-        every { messageData.isControl } returns false
+        val messageData: MessageData = createMessageData(isControl = false)
 
         val message = Message(
             "same-id",
@@ -528,13 +529,13 @@ class NimbusMessagingStorageTest {
             action = "action",
             mockk(relaxed = true),
             listOf("trigger"),
-            Message.Metadata("same-id")
+            Message.Metadata("same-id"),
         )
 
         every { spiedStorage.isMessageEligible(any(), any()) } returns true
         every { spiedStorage.isMessageUnderExperiment(any(), any()) } returns true
 
-        val result = spiedStorage.getNextMessage(listOf(message))
+        val result = spiedStorage.getNextMessage(MessageSurfaceId.HOMESCREEN, listOf(message))
 
         verify { messagingFeature.recordExposure() }
         assertEquals(message.id, result!!.id)
@@ -543,12 +544,10 @@ class NimbusMessagingStorageTest {
     @Test
     fun `GIVEN a control message WHEN calling getNextMessage THEN return the next eligible message`() {
         val spiedStorage = spyk(storage)
-        val messageData: MessageData = mockk(relaxed = true)
-        val controlMessageData: MessageData = mockk(relaxed = true)
+        val messageData: MessageData = createMessageData()
+        val controlMessageData: MessageData = createMessageData(isControl = true)
 
-        every { messageData.isControl } returns false
         every { spiedStorage.getOnControlBehavior() } returns SHOW_NEXT_MESSAGE
-        every { controlMessageData.isControl } returns true
 
         val message = Message(
             "id",
@@ -556,7 +555,7 @@ class NimbusMessagingStorageTest {
             action = "action",
             mockk(relaxed = true),
             listOf("trigger"),
-            Message.Metadata("same-id")
+            Message.Metadata("same-id"),
         )
 
         val controlMessage = Message(
@@ -565,13 +564,16 @@ class NimbusMessagingStorageTest {
             action = "action",
             mockk(relaxed = true),
             listOf("trigger"),
-            Message.Metadata("same-id")
+            Message.Metadata("same-id"),
         )
 
         every { spiedStorage.isMessageEligible(any(), any()) } returns true
         every { spiedStorage.isMessageUnderExperiment(any(), any()) } returns true
 
-        val result = spiedStorage.getNextMessage(listOf(controlMessage, message))
+        val result = spiedStorage.getNextMessage(
+            MessageSurfaceId.HOMESCREEN,
+            listOf(controlMessage, message),
+        )
 
         verify { messagingFeature.recordExposure() }
         assertEquals(message.id, result!!.id)
@@ -580,34 +582,36 @@ class NimbusMessagingStorageTest {
     private fun createMessageData(
         action: String = "action-1",
         style: String = "style-1",
-        triggers: List<String> = listOf("trigger-1")
-    ): MessageData {
-        val messageData1: MessageData = mockk(relaxed = true)
-        every { messageData1.action } returns action
-        every { messageData1.style } returns style
-        every { messageData1.trigger } returns triggers
-        return messageData1
-    }
+        triggers: List<String> = listOf("trigger-1"),
+        surface: MessageSurfaceId = MessageSurfaceId.HOMESCREEN,
+        isControl: Boolean = false,
+    ) = MessageData(
+        action = Res.string(action),
+        style = style,
+        trigger = triggers,
+        surface = surface,
+        isControl = isControl,
+    )
 
     private fun createMessagingFeature(
         triggers: Map<String, String> = mapOf("trigger-1" to "trigger-1-expression"),
         styles: Map<String, StyleData> = mapOf("style-1" to createStyle()),
         actions: Map<String, String> = mapOf("action-1" to "action-1-url"),
         messages: Map<String, MessageData> = mapOf(
-            "message-1" to createMessageData(),
-            "malformed" to mockk(relaxed = true)
+            "message-1" to createMessageData(surface = MessageSurfaceId.HOMESCREEN),
+            "message-2" to createMessageData(surface = MessageSurfaceId.NOTIFICATION),
+            "malformed" to createMessageData(action = "malformed-action"),
         ),
     ): FeatureHolder<Messaging> {
         val messagingFeature: FeatureHolder<Messaging> = mockk(relaxed = true)
-
-        messaging = mockk(relaxed = true)
-
-        every { messaging.triggers } returns triggers
-        every { messaging.styles } returns styles
-        every { messaging.actions } returns actions
-        every { messaging.messages } returns messages
-
+        messaging = Messaging(
+            actions = actions,
+            triggers = triggers,
+            messages = messages,
+            styles = styles,
+        )
         every { messagingFeature.value() } returns messaging
+
         return messagingFeature
     }
 

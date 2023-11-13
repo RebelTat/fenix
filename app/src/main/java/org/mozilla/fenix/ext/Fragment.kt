@@ -4,14 +4,18 @@
 
 package org.mozilla.fenix.ext
 
+import android.app.Activity
+import android.content.Intent
 import android.view.WindowManager
+import androidx.activity.result.ActivityResult
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.IdRes
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import androidx.navigation.NavDirections
 import androidx.navigation.NavOptions
-import androidx.navigation.fragment.NavHostFragment.findNavController
 import androidx.navigation.fragment.findNavController
 import mozilla.components.concept.base.crash.Breadcrumb
 import org.mozilla.fenix.NavHostActivity
@@ -25,7 +29,7 @@ val Fragment.requireComponents: Components
     get() = requireContext().components
 
 fun Fragment.nav(@IdRes id: Int?, directions: NavDirections, options: NavOptions? = null) {
-    findNavController(this).nav(id, directions, options)
+    findNavController().nav(id, directions, options)
 }
 
 fun Fragment.getPreferenceKey(@StringRes resourceId: Int): String = getString(resourceId)
@@ -69,7 +73,7 @@ fun Fragment.hideToolbar() {
 fun Fragment.redirectToReAuth(
     destinations: List<Int>,
     currentDestination: Int?,
-    currentLocation: Int
+    currentLocation: Int,
 ) {
     if (currentDestination !in destinations) {
         // Workaround for memory leak caused by Android SDK bug
@@ -79,11 +83,13 @@ fun Fragment.redirectToReAuth(
             R.id.loginDetailFragment,
             R.id.editLoginFragment,
             R.id.addLoginFragment,
-            R.id.savedLoginsFragment -> {
+            R.id.savedLoginsFragment,
+            -> {
                 findNavController().popBackStack(R.id.savedLoginsAuthFragment, false)
             }
             R.id.creditCardEditorFragment,
-            R.id.creditCardsManagementFragment -> {
+            R.id.creditCardsManagementFragment,
+            -> {
                 findNavController().popBackStack(R.id.autofillSettingFragment, false)
             }
         }
@@ -92,7 +98,7 @@ fun Fragment.redirectToReAuth(
 
 fun Fragment.breadcrumb(
     message: String,
-    data: Map<String, String> = emptyMap()
+    data: Map<String, String> = emptyMap(),
 ) {
     val activityName = activity?.let { it::class.java.simpleName } ?: "null"
 
@@ -103,10 +109,10 @@ fun Fragment.breadcrumb(
             data = data + mapOf(
                 "instance" to hashCode().toString(),
                 "activityInstance" to activity?.hashCode().toString(),
-                "activityName" to activityName
+                "activityName" to activityName,
             ),
-            level = Breadcrumb.Level.INFO
-        )
+            level = Breadcrumb.Level.INFO,
+        ),
     )
 }
 
@@ -115,7 +121,7 @@ fun Fragment.breadcrumb(
  */
 fun Fragment.secure() {
     this.activity?.window?.addFlags(
-        WindowManager.LayoutParams.FLAG_SECURE
+        WindowManager.LayoutParams.FLAG_SECURE,
     )
 }
 
@@ -124,6 +130,22 @@ fun Fragment.secure() {
  */
 fun Fragment.removeSecure() {
     this.activity?.window?.clearFlags(
-        WindowManager.LayoutParams.FLAG_SECURE
+        WindowManager.LayoutParams.FLAG_SECURE,
     )
+}
+
+/**
+ * Register a request to start an activity for result.
+ */
+fun Fragment.registerForActivityResult(
+    onFailure: (result: ActivityResult) -> Unit = {},
+    onSuccess: (result: ActivityResult) -> Unit,
+): ActivityResultLauncher<Intent> {
+    return registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            onSuccess(result)
+        } else {
+            onFailure(result)
+        }
+    }
 }

@@ -22,24 +22,26 @@ import org.mozilla.fenix.databinding.TabTrayGridItemBinding
 import org.mozilla.fenix.databinding.TabTrayItemBinding
 import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.selection.SelectionHolder
+import org.mozilla.fenix.tabstray.TabsTrayInteractor
 import org.mozilla.fenix.tabstray.TabsTrayStore
+import org.mozilla.fenix.tabstray.browser.compose.ComposeGridViewHolder
 import org.mozilla.fenix.tabstray.browser.compose.ComposeListViewHolder
 
 /**
  * A [RecyclerView.Adapter] for browser tabs.
  *
  * @param context [Context] used for various platform interactions or accessing [Components]
- * @param interactor [BrowserTrayInteractor] handling tabs interactions in a tab tray.
+ * @param interactor [TabsTrayInteractor] handling tabs interactions in a tab tray.
  * @param store [TabsTrayStore] containing the complete state of tabs tray and methods to update that.
  * @param featureName [String] representing the name of the feature displaying tabs. Used in telemetry reporting.
  * @param viewLifecycleOwner [LifecycleOwner] life cycle owner for the view.
  */
 class BrowserTabsAdapter(
     private val context: Context,
-    val interactor: BrowserTrayInteractor,
+    val interactor: TabsTrayInteractor,
     private val store: TabsTrayStore,
     override val featureName: String,
-    internal val viewLifecycleOwner: LifecycleOwner
+    internal val viewLifecycleOwner: LifecycleOwner,
 ) : TabsAdapter<SelectableTabViewHolder>(interactor), FeatureNameHolder {
 
     /**
@@ -48,7 +50,8 @@ class BrowserTabsAdapter(
     enum class ViewType(val layoutRes: Int) {
         LIST(BrowserTabViewHolder.ListViewHolder.LAYOUT_ID),
         COMPOSE_LIST(ComposeListViewHolder.LAYOUT_ID),
-        GRID(BrowserTabViewHolder.GridViewHolder.LAYOUT_ID)
+        GRID(BrowserTabViewHolder.GridViewHolder.LAYOUT_ID),
+        COMPOSE_GRID(ComposeGridViewHolder.LAYOUT_ID),
     }
 
     /**
@@ -62,7 +65,11 @@ class BrowserTabsAdapter(
     override fun getItemViewType(position: Int): Int {
         return when {
             context.components.settings.gridTabView -> {
-                ViewType.GRID.layoutRes
+                if (FeatureFlags.composeTabsTray) {
+                    ViewType.COMPOSE_GRID.layoutRes
+                } else {
+                    ViewType.GRID.layoutRes
+                }
             }
             else -> {
                 if (FeatureFlags.composeTabsTray) {
@@ -83,7 +90,16 @@ class BrowserTabsAdapter(
                     selectionHolder = selectionHolder,
                     composeItemView = ComposeView(parent.context),
                     featureName = featureName,
-                    viewLifecycleOwner = viewLifecycleOwner
+                    viewLifecycleOwner = viewLifecycleOwner,
+                )
+            ViewType.COMPOSE_GRID.layoutRes ->
+                ComposeGridViewHolder(
+                    interactor = interactor,
+                    store = store,
+                    selectionHolder = selectionHolder,
+                    composeItemView = ComposeView(parent.context),
+                    featureName = featureName,
+                    viewLifecycleOwner = viewLifecycleOwner,
                 )
             else -> {
                 val view = LayoutInflater.from(parent.context).inflate(viewType, parent, false)
@@ -94,7 +110,7 @@ class BrowserTabsAdapter(
                         store,
                         selectionHolder,
                         view,
-                        featureName
+                        featureName,
                     )
                 } else {
                     BrowserTabViewHolder.ListViewHolder(
@@ -103,7 +119,7 @@ class BrowserTabsAdapter(
                         store,
                         selectionHolder,
                         view,
-                        featureName
+                        featureName,
                     )
                 }
             }
@@ -118,19 +134,23 @@ class BrowserTabsAdapter(
                 ViewType.GRID.layoutRes -> {
                     val gridBinding = TabTrayGridItemBinding.bind(holder.itemView)
                     selectedMaskView = gridBinding.checkboxInclude.selectedMask
-                    gridBinding.mozacBrowserTabstrayClose.setOnClickListener { interactor.close(tab, featureName) }
+                    gridBinding.mozacBrowserTabstrayClose.setOnClickListener {
+                        interactor.onTabClosed(tab, featureName)
+                    }
                 }
                 ViewType.LIST.layoutRes -> {
                     val listBinding = TabTrayItemBinding.bind(holder.itemView)
                     selectedMaskView = listBinding.checkboxInclude.selectedMask
-                    listBinding.mozacBrowserTabstrayClose.setOnClickListener { interactor.close(tab, featureName) }
+                    listBinding.mozacBrowserTabstrayClose.setOnClickListener {
+                        interactor.onTabClosed(tab, featureName)
+                    }
                 }
             }
 
             selectionHolder?.let {
                 holder.showTabIsMultiSelectEnabled(
                     selectedMaskView,
-                    (it.selectedItems.map { item -> item.id }).contains(tab.id)
+                    (it.selectedItems.map { item -> item.id }).contains(tab.id),
                 )
             }
         }
@@ -171,7 +191,7 @@ class BrowserTabsAdapter(
             }
             holder.showTabIsMultiSelectEnabled(
                 selectedMaskView,
-                it.selectedItems.map { item -> item.id }.contains(tab.id)
+                it.selectedItems.map { item -> item.id }.contains(tab.id),
             )
         }
     }

@@ -30,7 +30,6 @@ import mozilla.components.service.glean.private.NoExtras
 import mozilla.components.support.base.feature.ViewBoundFeatureWrapper
 import org.mozilla.fenix.GleanMetrics.Collections
 import org.mozilla.fenix.GleanMetrics.Events
-import org.mozilla.fenix.GleanMetrics.ExperimentsDefaultBrowser
 import org.mozilla.fenix.GleanMetrics.ReaderMode
 import org.mozilla.fenix.HomeActivity
 import org.mozilla.fenix.NavGraphDirections
@@ -58,7 +57,7 @@ interface BrowserToolbarMenuController {
     fun handleToolbarItemInteraction(item: ToolbarMenu.Item)
 }
 
-@Suppress("LargeClass", "ForbiddenComment")
+@Suppress("LargeClass", "ForbiddenComment", "LongParameterList")
 class DefaultBrowserToolbarMenuController(
     private val store: BrowserStore,
     private val activity: HomeActivity,
@@ -76,7 +75,7 @@ class DefaultBrowserToolbarMenuController(
     private val tabCollectionStorage: TabCollectionStorage,
     private val topSitesStorage: DefaultTopSitesStorage,
     private val pinnedSiteStorage: PinnedSiteStorage,
-    private val browserStore: BrowserStore
+    private val browserStore: BrowserStore,
 ) : BrowserToolbarMenuController {
 
     private val currentSession
@@ -129,7 +128,7 @@ class DefaultBrowserToolbarMenuController(
                             // right thing and take care of routing to an already existing browser and avoid
                             // cloning a new one.
                             flags = flags or Intent.FLAG_ACTIVITY_NEW_TASK
-                        }
+                        },
                     )
 
                     // Close this activity (and the task) since it is no longer displaying any session
@@ -156,7 +155,7 @@ class DefaultBrowserToolbarMenuController(
                     FenixSnackbar.make(
                         view = v,
                         duration = Snackbar.LENGTH_LONG,
-                        isDisplayedWithBrowserToolbar = true
+                        isDisplayedWithBrowserToolbar = true,
                     )
                         .setText(v.context.getString(R.string.deleting_browsing_data_in_progress))
                 }
@@ -171,8 +170,8 @@ class DefaultBrowserToolbarMenuController(
                 if (item.viewHistory) {
                     navController.navigate(
                         BrowserFragmentDirections.actionGlobalTabHistoryDialogFragment(
-                            activeSessionId = customTabSessionId
-                        )
+                            activeSessionId = customTabSessionId,
+                        ),
                     )
                 } else {
                     currentSession?.let {
@@ -184,8 +183,8 @@ class DefaultBrowserToolbarMenuController(
                 if (item.viewHistory) {
                     navController.navigate(
                         BrowserFragmentDirections.actionGlobalTabHistoryDialogFragment(
-                            activeSessionId = customTabSessionId
-                        )
+                            activeSessionId = customTabSessionId,
+                        ),
                     )
                 } else {
                     currentSession?.let {
@@ -211,13 +210,14 @@ class DefaultBrowserToolbarMenuController(
             }
             is ToolbarMenu.Item.Share -> {
                 val directions = NavGraphDirections.actionGlobalShareFragment(
+                    sessionId = currentSession?.id,
                     data = arrayOf(
                         ShareData(
                             url = getProperUrl(currentSession),
-                            title = currentSession?.content?.title
-                        )
+                            title = currentSession?.content?.title,
+                        ),
                     ),
-                    showPage = true
+                    showPage = true,
                 )
                 navController.navigate(directions)
             }
@@ -237,7 +237,7 @@ class DefaultBrowserToolbarMenuController(
                 browserAnimator.captureEngineViewAndDrawStatically {
                     navController.nav(
                         R.id.browserFragment,
-                        directions
+                        directions,
                     )
                 }
             }
@@ -245,7 +245,7 @@ class DefaultBrowserToolbarMenuController(
                 currentSession?.let {
                     sessionUseCases.requestDesktopSite.invoke(
                         item.isChecked,
-                        it.id
+                        it.id,
                     )
                 }
             }
@@ -276,10 +276,10 @@ class DefaultBrowserToolbarMenuController(
                         FenixSnackbar.make(
                             view = swipeRefresh,
                             duration = Snackbar.LENGTH_SHORT,
-                            isDisplayedWithBrowserToolbar = true
+                            isDisplayedWithBrowserToolbar = true,
                         )
                             .setText(
-                                context.getString(R.string.snackbar_added_to_shortcuts)
+                                context.getString(R.string.snackbar_added_to_shortcuts),
                             )
                             .show()
                     }
@@ -305,14 +305,14 @@ class DefaultBrowserToolbarMenuController(
             is ToolbarMenu.Item.AddonsManager -> browserAnimator.captureEngineViewAndDrawStatically {
                 navController.nav(
                     R.id.browserFragment,
-                    BrowserFragmentDirections.actionGlobalAddonsManagementFragment()
+                    BrowserFragmentDirections.actionGlobalAddonsManagementFragment(),
                 )
             }
             is ToolbarMenu.Item.SaveToCollection -> {
                 Collections.saveButton.record(
                     Collections.SaveButtonExtra(
-                        TELEMETRY_BROWSER_IDENTIFIER
-                    )
+                        TELEMETRY_BROWSER_IDENTIFIER,
+                    ),
                 )
 
                 currentSession?.let { currentSession ->
@@ -324,7 +324,7 @@ class DefaultBrowserToolbarMenuController(
                                 SaveCollectionStep.NameCollection
                             } else {
                                 SaveCollectionStep.SelectCollection
-                            }
+                            },
                         )
                     navController.nav(R.id.browserFragment, directions)
                 }
@@ -337,29 +337,28 @@ class DefaultBrowserToolbarMenuController(
             is ToolbarMenu.Item.Bookmarks -> browserAnimator.captureEngineViewAndDrawStatically {
                 navController.nav(
                     R.id.browserFragment,
-                    BrowserFragmentDirections.actionGlobalBookmarkFragment(BookmarkRoot.Mobile.id)
+                    BrowserFragmentDirections.actionGlobalBookmarkFragment(BookmarkRoot.Mobile.id),
                 )
             }
             is ToolbarMenu.Item.History -> browserAnimator.captureEngineViewAndDrawStatically {
                 navController.nav(
                     R.id.browserFragment,
-                    BrowserFragmentDirections.actionGlobalHistoryFragment()
+                    BrowserFragmentDirections.actionGlobalHistoryFragment(),
                 )
             }
 
             is ToolbarMenu.Item.Downloads -> browserAnimator.captureEngineViewAndDrawStatically {
                 navController.nav(
                     R.id.browserFragment,
-                    BrowserFragmentDirections.actionGlobalDownloadsFragment()
+                    BrowserFragmentDirections.actionGlobalDownloadsFragment(),
                 )
             }
             is ToolbarMenu.Item.NewTab -> {
                 navController.navigate(
-                    BrowserFragmentDirections.actionGlobalHome(focusOnAddressBar = true)
+                    BrowserFragmentDirections.actionGlobalHome(focusOnAddressBar = true),
                 )
             }
             is ToolbarMenu.Item.SetDefaultBrowser -> {
-                ExperimentsDefaultBrowser.toolbarMenuClicked.record(NoExtras())
                 activity.openSetDefaultBrowserOption()
             }
             is ToolbarMenu.Item.RemoveFromTopSites -> {
@@ -381,10 +380,10 @@ class DefaultBrowserToolbarMenuController(
                     FenixSnackbar.make(
                         view = swipeRefresh,
                         duration = Snackbar.LENGTH_SHORT,
-                        isDisplayedWithBrowserToolbar = true
+                        isDisplayedWithBrowserToolbar = true,
                     )
                         .setText(
-                            swipeRefresh.context.getString(R.string.snackbar_top_site_removed)
+                            swipeRefresh.context.getString(R.string.snackbar_top_site_removed),
                         )
                         .show()
                 }

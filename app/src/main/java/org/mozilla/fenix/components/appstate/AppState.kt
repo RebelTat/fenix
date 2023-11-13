@@ -12,6 +12,7 @@ import mozilla.components.lib.state.State
 import mozilla.components.service.pocket.PocketStory
 import mozilla.components.service.pocket.PocketStory.PocketRecommendedStory
 import mozilla.components.service.pocket.PocketStory.PocketSponsoredStory
+import org.mozilla.fenix.gleanplumb.MessagingState
 import org.mozilla.fenix.home.HomeFragment
 import org.mozilla.fenix.home.Mode
 import org.mozilla.fenix.home.pocket.PocketRecommendedStoriesCategory
@@ -21,7 +22,7 @@ import org.mozilla.fenix.home.recentsyncedtabs.RecentSyncedTabState
 import org.mozilla.fenix.home.recenttabs.RecentTab
 import org.mozilla.fenix.home.recentvisits.RecentlyVisitedItem
 import org.mozilla.fenix.library.history.PendingDeletionHistory
-import org.mozilla.fenix.gleanplumb.MessagingState
+import org.mozilla.fenix.wallpapers.WallpaperState
 
 /**
  * Value type that represents the state of the tabs tray.
@@ -68,4 +69,5 @@ data class AppState(
     val pocketSponsoredStories: List<PocketSponsoredStory> = emptyList(),
     val messaging: MessagingState = MessagingState(),
     val pendingDeletionHistoryItems: Set<PendingDeletionHistory> = emptySet(),
+    val wallpaperState: WallpaperState = WallpaperState.default,
 ) : State

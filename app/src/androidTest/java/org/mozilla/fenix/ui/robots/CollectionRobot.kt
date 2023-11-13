@@ -7,6 +7,7 @@ package org.mozilla.fenix.ui.robots
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -15,6 +16,7 @@ import androidx.compose.ui.test.swipeRight
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.NoMatchingViewException
 import androidx.test.espresso.action.ViewActions.pressImeActionButton
+import androidx.test.espresso.matcher.RootMatchers
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiScrollable
@@ -23,9 +25,12 @@ import androidx.test.uiautomator.Until
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.mozilla.fenix.R
+import org.mozilla.fenix.helpers.MatcherHelper.itemWithResId
 import org.mozilla.fenix.helpers.TestAssetHelper.waitingTime
+import org.mozilla.fenix.helpers.TestHelper.mDevice
 import org.mozilla.fenix.helpers.TestHelper.packageName
 import org.mozilla.fenix.helpers.TestHelper.scrollToElementByText
+import org.mozilla.fenix.helpers.click
 import org.mozilla.fenix.helpers.ext.waitNotNull
 
 class CollectionRobot {
@@ -33,15 +38,15 @@ class CollectionRobot {
     fun verifySelectCollectionScreen() {
         assertTrue(
             mDevice.findObject(UiSelector().text("Select collection"))
-                .exists()
+                .exists(),
         )
         assertTrue(
             mDevice.findObject(UiSelector().resourceId("$packageName:id/collections_list"))
-                .exists()
+                .exists(),
         )
         assertTrue(
             mDevice.findObject(UiSelector().text("Add new collection"))
-                .exists()
+                .exists(),
         )
     }
 
@@ -49,14 +54,15 @@ class CollectionRobot {
 
     fun verifyCollectionNameTextField() {
         assertTrue(
-            mainMenuEditCollectionNameField().waitForExists(waitingTime)
+            mainMenuEditCollectionNameField().waitForExists(waitingTime),
         )
     }
 
     // names a collection saved from tab drawer
     fun typeCollectionNameAndSave(collectionName: String) {
         collectionNameTextField().text = collectionName
-        mDevice.findObject(UiSelector().textContains("OK")).click()
+        addCollectionButtonPanel.waitForExists(waitingTime)
+        addCollectionOkButton.click()
     }
 
     fun verifyTabsSelectedCounterText(numOfTabs: Int) {
@@ -78,12 +84,13 @@ class CollectionRobot {
         if (visible) {
             scrollToElementByText(title)
             assertTrue(
-                collectionListItem(title).waitForExists(waitingTime)
+                collectionListItem(title).waitForExists(waitingTime),
             )
-        } else
+        } else {
             assertTrue(
-                collectionListItem(title).waitUntilGone(waitingTime)
+                collectionListItem(title).waitUntilGone(waitingTime),
             )
+        }
     }
 
     fun verifyCollectionTabUrl(visible: Boolean, url: String) {
@@ -151,11 +158,11 @@ class CollectionRobot {
     fun verifyCollectionItemRemoveButtonIsVisible(title: String, visible: Boolean) {
         if (visible) {
             assertTrue(
-                removeTabFromCollectionButton(title).exists()
+                removeTabFromCollectionButton(title).exists(),
             )
         } else {
             assertFalse(
-                removeTabFromCollectionButton(title).exists()
+                removeTabFromCollectionButton(title).exists(),
             )
         }
     }
@@ -182,13 +189,13 @@ class CollectionRobot {
 
     fun swipeToBottom() =
         UiScrollable(
-            UiSelector().resourceId("$packageName:id/sessionControlRecyclerView")
+            UiSelector().resourceId("$packageName:id/sessionControlRecyclerView"),
         ).scrollToEnd(3)
 
     class Transition {
         fun collapseCollection(
             title: String,
-            interact: HomeScreenRobot.() -> Unit
+            interact: HomeScreenRobot.() -> Unit,
         ): HomeScreenRobot.Transition {
             try {
                 collectionTitle(title).waitForExists(waitingTime)
@@ -205,7 +212,7 @@ class CollectionRobot {
         // names a collection saved from the 3dot menu
         fun typeCollectionNameAndSave(
             name: String,
-            interact: BrowserRobot.() -> Unit
+            interact: BrowserRobot.() -> Unit,
         ): BrowserRobot.Transition {
             mainMenuEditCollectionNameField().waitForExists(waitingTime)
             mainMenuEditCollectionNameField().text = name
@@ -220,7 +227,7 @@ class CollectionRobot {
 
         fun selectExistingCollection(
             title: String,
-            interact: BrowserRobot.() -> Unit
+            interact: BrowserRobot.() -> Unit,
         ): BrowserRobot.Transition {
             collectionTitle(title).waitForExists(waitingTime)
             collectionTitle(title).click()
@@ -247,7 +254,7 @@ fun collectionRobot(interact: CollectionRobot.() -> Unit): CollectionRobot.Trans
 private fun collectionTitle(title: String) =
     mDevice.findObject(
         UiSelector()
-            .text(title)
+            .text(title),
     )
 
 private fun collectionThreeDotButton(rule: ComposeTestRule) =
@@ -257,27 +264,27 @@ private fun collectionListItem(title: String) = mDevice.findObject(UiSelector().
 
 private fun shareCollectionButton() =
     mDevice.findObject(
-        UiSelector().description("Share")
+        UiSelector().description("Share"),
     )
 
 private fun removeTabFromCollectionButton(title: String) =
     mDevice.findObject(
-        UiSelector().text(title)
+        UiSelector().text(title),
     ).getFromParent(
         UiSelector()
-            .description("Remove tab from collection")
+            .description("Remove tab from collection"),
     )
 
 // collection name text field, opened from tab drawer
 private fun collectionNameTextField() =
     mDevice.findObject(
-        UiSelector().resourceId("$packageName:id/collection_name")
+        UiSelector().resourceId("$packageName:id/collection_name"),
     )
 
 // collection name text field, when saving from the main menu option
 private fun mainMenuEditCollectionNameField() =
     mDevice.findObject(
-        UiSelector().resourceId("$packageName:id/name_collection_edittext")
+        UiSelector().resourceId("$packageName:id/name_collection_edittext"),
     )
 
 private fun addNewCollectionButton() =
@@ -285,5 +292,9 @@ private fun addNewCollectionButton() =
 
 private fun backButton() =
     mDevice.findObject(
-        UiSelector().resourceId("$packageName:id/back_button")
+        UiSelector().resourceId("$packageName:id/back_button"),
     )
+private val addCollectionButtonPanel =
+    itemWithResId("$packageName:id/buttonPanel")
+
+private val addCollectionOkButton = onView(withId(android.R.id.button1)).inRoot(RootMatchers.isDialog())

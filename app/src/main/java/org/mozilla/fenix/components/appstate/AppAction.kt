@@ -11,16 +11,19 @@ import mozilla.components.lib.state.Action
 import mozilla.components.service.pocket.PocketStory
 import mozilla.components.service.pocket.PocketStory.PocketSponsoredStory
 import org.mozilla.fenix.components.AppStore
+import org.mozilla.fenix.gleanplumb.Message
+import org.mozilla.fenix.gleanplumb.MessagingState
 import org.mozilla.fenix.home.Mode
 import org.mozilla.fenix.home.pocket.PocketRecommendedStoriesCategory
 import org.mozilla.fenix.home.pocket.PocketRecommendedStoriesSelectedCategory
 import org.mozilla.fenix.home.recentbookmarks.RecentBookmark
+import org.mozilla.fenix.home.recentsyncedtabs.RecentSyncedTab
 import org.mozilla.fenix.home.recentsyncedtabs.RecentSyncedTabState
 import org.mozilla.fenix.home.recenttabs.RecentTab
 import org.mozilla.fenix.home.recentvisits.RecentlyVisitedItem
 import org.mozilla.fenix.library.history.PendingDeletionHistory
-import org.mozilla.fenix.gleanplumb.Message
-import org.mozilla.fenix.gleanplumb.MessagingState
+import org.mozilla.fenix.nimbus.MessageSurfaceId
+import org.mozilla.fenix.wallpapers.Wallpaper
 
 /**
  * [Action] implementation related to [AppStore].
@@ -43,7 +46,8 @@ sealed class AppAction : Action {
         val showCollectionPlaceholder: Boolean,
         val recentTabs: List<RecentTab>,
         val recentBookmarks: List<RecentBookmark>,
-        val recentHistory: List<RecentlyVisitedItem>
+        val recentHistory: List<RecentlyVisitedItem>,
+        val recentSyncedTabState: RecentSyncedTabState,
     ) :
         AppAction()
 
@@ -60,45 +64,54 @@ sealed class AppAction : Action {
     data class RecentHistoryChange(val recentHistory: List<RecentlyVisitedItem>) : AppAction()
     data class RemoveRecentHistoryHighlight(val highlightUrl: String) : AppAction()
     data class DisbandSearchGroupAction(val searchTerm: String) : AppAction()
+
     /**
      * Indicates the given [categoryName] was selected by the user.
      */
     data class SelectPocketStoriesCategory(val categoryName: String) : AppAction()
+
     /**
      * Indicates the given [categoryName] was deselected by the user.
      */
     data class DeselectPocketStoriesCategory(val categoryName: String) : AppAction()
+
     /**
      * Indicates the given [storiesShown] were seen by the user.
      */
     data class PocketStoriesShown(val storiesShown: List<PocketStory>) : AppAction()
+
     /**
      * Cleans all in-memory data about Pocket stories and categories.
      */
     object PocketStoriesClean : AppAction()
+
     /**
      * Replaces the current list of Pocket sponsored stories.
      */
     data class PocketSponsoredStoriesChange(val sponsoredStories: List<PocketSponsoredStory>) : AppAction()
+
     /**
      * Adds a set of items marked for removal to the app state, to be hidden in the UI.
      */
     data class AddPendingDeletionSet(val historyItems: Set<PendingDeletionHistory>) : AppAction()
+
     /**
      * Removes a set of items, previously marked for removal, to be displayed again in the UI.
      */
     data class UndoPendingDeletionSet(val historyItems: Set<PendingDeletionHistory>) : AppAction()
+
     /**
      * Replaces the list of available Pocket recommended stories categories.
      */
     data class PocketStoriesCategoriesChange(val storiesCategories: List<PocketRecommendedStoriesCategory>) :
         AppAction()
+
     /**
      * Restores the list of Pocket recommended stories categories selections.
      */
     data class PocketStoriesCategoriesSelectionsChange(
         val storiesCategories: List<PocketRecommendedStoriesCategory>,
-        val categoriesSelected: List<PocketRecommendedStoriesSelectedCategory>
+        val categoriesSelected: List<PocketRecommendedStoriesSelectedCategory>,
     ) : AppAction()
     object RemoveCollectionsPlaceholder : AppAction()
 
@@ -106,6 +119,12 @@ sealed class AppAction : Action {
      * Updates the [RecentSyncedTabState] with the given [state].
      */
     data class RecentSyncedTabStateChange(val state: RecentSyncedTabState) : AppAction()
+
+    /**
+     * Add a [RecentSyncedTab] url to the homescreen blocklist and remove it
+     * from the recent synced tabs list.
+     */
+    data class RemoveRecentSyncedTab(val syncedTab: RecentSyncedTab) : AppAction()
 
     /**
      * [Action]s related to interactions with the Messaging Framework.
@@ -119,7 +138,7 @@ sealed class AppAction : Action {
         /**
          * Evaluates if a new messages should be shown to users.
          */
-        object Evaluate : MessagingAction()
+        data class Evaluate(val surface: MessageSurfaceId) : MessagingAction()
 
         /**
          * Updates [MessagingState.messageToShow] with the given [message].
@@ -129,7 +148,7 @@ sealed class AppAction : Action {
         /**
          * Updates [MessagingState.messageToShow] with the given [message].
          */
-        object ConsumeMessageToShow : MessagingAction()
+        data class ConsumeMessageToShow(val surface: MessageSurfaceId) : MessagingAction()
 
         /**
          * Updates [MessagingState.messages] with the given [messages].
@@ -146,4 +165,36 @@ sealed class AppAction : Action {
          */
         data class MessageDismissed(val message: Message) : MessagingAction()
     }
+
+    /**
+     * [Action]s related to interactions with the wallpapers feature.
+     */
+    sealed class WallpaperAction : AppAction() {
+        /**
+         * Indicates that a different [wallpaper] was selected.
+         */
+        data class UpdateCurrentWallpaper(val wallpaper: Wallpaper) : WallpaperAction()
+
+        /**
+         * Indicates that the list of potential wallpapers has changed.
+         */
+        data class UpdateAvailableWallpapers(val wallpapers: List<Wallpaper>) : WallpaperAction()
+
+        /**
+         * Indicates a change in the download state of a wallpaper. Note that this is meant to be
+         * used for full size images, not thumbnails.
+         *
+         * @property wallpaper The wallpaper that is being updated.
+         * @property imageState The updated image state for the wallpaper.
+         */
+        data class UpdateWallpaperDownloadState(
+            val wallpaper: Wallpaper,
+            val imageState: Wallpaper.ImageFileState,
+        ) : WallpaperAction()
+    }
+
+    /**
+     * Indicates that the app has been resumed and metrics that relate to that should be sent.
+     */
+    object ResumedMetricsAction : AppAction()
 }

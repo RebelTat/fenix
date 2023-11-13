@@ -1,21 +1,19 @@
 package org.mozilla.fenix.ui
 
 import androidx.core.net.toUri
-import org.junit.After
-import org.junit.Before
+import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
 import org.mozilla.fenix.customannotations.SmokeTest
 import org.mozilla.fenix.helpers.Constants.PackageName.GMAIL_APP
 import org.mozilla.fenix.helpers.Constants.PackageName.PHONE_APP
-import org.mozilla.fenix.helpers.FeatureSettingsHelper
 import org.mozilla.fenix.helpers.HomeActivityIntentTestRule
 import org.mozilla.fenix.helpers.TestHelper.assertNativeAppOpens
 import org.mozilla.fenix.ui.robots.customTabScreen
 import org.mozilla.fenix.ui.robots.navigationToolbar
+import org.mozilla.fenix.ui.robots.pwaScreen
 
 class PwaTest {
-    private val featureSettingsHelper = FeatureSettingsHelper()
     /* Updated externalLinks.html to v2.0,
        changed the hypertext reference to mozilla-mobile.github.io/testapp/downloads for "External link"
      */
@@ -25,17 +23,7 @@ class PwaTest {
     private val shortcutTitle = "TEST_APP"
 
     @get:Rule
-    val activityTestRule = HomeActivityIntentTestRule()
-
-    @Before
-    fun setUp() {
-        featureSettingsHelper.disablePwaCFR(true)
-    }
-
-    @After
-    fun tearDown() {
-        featureSettingsHelper.resetAllFeatureFlags()
-    }
+    val activityTestRule = HomeActivityIntentTestRule.withDefaultSettingsOverrides()
 
     @SmokeTest
     @Test
@@ -44,6 +32,8 @@ class PwaTest {
 
         navigationToolbar {
         }.enterURLAndEnterToBrowser(externalLinksPWAPage.toUri()) {
+            waitForPageToLoad()
+            verifyNotificationDotOnMainMenu()
         }.openThreeDotMenu {
         }.clickInstall {
             clickAddAutomaticallyButton()
@@ -56,13 +46,14 @@ class PwaTest {
         }
     }
 
+    @Ignore("Failing, see: https://github.com/mozilla-mobile/fenix/issues/28212")
     @SmokeTest
     @Test
     fun emailLinkPWATest() {
-
         navigationToolbar {
         }.enterURLAndEnterToBrowser(externalLinksPWAPage.toUri()) {
             waitForPageToLoad()
+            verifyNotificationDotOnMainMenu()
         }.openThreeDotMenu {
         }.clickInstall {
             clickAddAutomaticallyButton()
@@ -75,16 +66,36 @@ class PwaTest {
     @SmokeTest
     @Test
     fun telephoneLinkPWATest() {
-
         navigationToolbar {
         }.enterURLAndEnterToBrowser(externalLinksPWAPage.toUri()) {
             waitForPageToLoad()
+            verifyNotificationDotOnMainMenu()
         }.openThreeDotMenu {
         }.clickInstall {
             clickAddAutomaticallyButton()
         }.openHomeScreenShortcut(shortcutTitle) {
             clickLinkMatchingText("Telephone link")
+            clickOpenInAppPromptButton()
             assertNativeAppOpens(PHONE_APP, phoneLink)
+        }
+    }
+
+    @SmokeTest
+    @Test
+    fun appLikeExperiencePWATest() {
+        navigationToolbar {
+        }.enterURLAndEnterToBrowser(externalLinksPWAPage.toUri()) {
+            waitForPageToLoad()
+            verifyNotificationDotOnMainMenu()
+        }.openThreeDotMenu {
+        }.clickInstall {
+            clickAddAutomaticallyButton()
+        }.openHomeScreenShortcut(shortcutTitle) {
+        }
+
+        pwaScreen {
+            verifyCustomTabToolbarIsNotDisplayed()
+            verifyPwaActivityInCurrentTask()
         }
     }
 }

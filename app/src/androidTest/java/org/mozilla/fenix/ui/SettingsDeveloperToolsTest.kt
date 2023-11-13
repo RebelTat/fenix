@@ -7,10 +7,10 @@ package org.mozilla.fenix.ui
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
 import okhttp3.mockwebserver.MockWebServer
-import org.junit.Rule
-import org.junit.Before
 import org.junit.After
+import org.junit.Before
 import org.junit.Ignore
+import org.junit.Rule
 import org.junit.Test
 import org.mozilla.fenix.helpers.AndroidAssetDispatcher
 import org.mozilla.fenix.helpers.HomeActivityTestRule
@@ -24,7 +24,7 @@ import org.mozilla.fenix.ui.robots.homeScreen
 class SettingsDeveloperToolsTest {
     /* ktlint-disable no-blank-line-before-rbrace */ // This imposes unreadable grouping.
 
-    private val mDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+    private lateinit var mDevice: UiDevice
     private lateinit var mockWebServer: MockWebServer
 
     @get:Rule
@@ -32,6 +32,7 @@ class SettingsDeveloperToolsTest {
 
     @Before
     fun setUp() {
+        mDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
         mockWebServer = MockWebServer().apply {
             dispatcher = AndroidAssetDispatcher()
             start()
@@ -43,8 +44,8 @@ class SettingsDeveloperToolsTest {
         mockWebServer.shutdown()
     }
 
-    @Test
     // Walks through settings developer tools menu and sub-menus to ensure all items are present
+    @Test
     fun settingsDeveloperToolsItemsTest() {
         homeScreen {
         }.openThreeDotMenu {

@@ -21,7 +21,7 @@ class SearchDialogInteractorTest {
     fun setup() {
         searchController = mockk(relaxed = true)
         interactor = SearchDialogInteractor(
-            searchController
+            searchController,
         )
     }
 
@@ -64,6 +64,14 @@ class SearchDialogInteractorTest {
     @Test
     fun onSearchTermsTapped() {
         interactor.onSearchTermsTapped("test")
+        verify {
+            searchController.handleSearchTermsTapped("test")
+        }
+    }
+
+    @Test
+    fun `WHEN the search term from history is tapped THEN delegate the event to the controller`() {
+        interactor.onHistorySearchTermTapped("test")
         verify {
             searchController.handleSearchTermsTapped("test")
         }

@@ -6,8 +6,11 @@ package org.mozilla.fenix.settings.advanced
 
 import android.app.Activity
 import android.content.Context
+import mozilla.components.browser.state.action.SearchAction
+import mozilla.components.browser.state.store.BrowserStore
 import mozilla.components.support.locale.LocaleManager
 import mozilla.components.support.locale.LocaleUseCases
+import org.mozilla.fenix.nimbus.FxNimbus
 import java.util.Locale
 
 interface LocaleSettingsController {
@@ -19,7 +22,8 @@ interface LocaleSettingsController {
 class DefaultLocaleSettingsController(
     private val activity: Activity,
     private val localeSettingsStore: LocaleSettingsStore,
-    private val localeUseCase: LocaleUseCases
+    private val browserStore: BrowserStore,
+    private val localeUseCase: LocaleUseCases,
 ) : LocaleSettingsController {
 
     override fun handleLocaleSelected(locale: Locale) {
@@ -29,8 +33,12 @@ class DefaultLocaleSettingsController(
             return
         }
         localeSettingsStore.dispatch(LocaleSettingsAction.Select(locale))
+        browserStore.dispatch(SearchAction.RefreshSearchEnginesAction)
         LocaleManager.setNewLocale(activity, localeUseCase, locale)
         LocaleManager.updateBaseConfiguration(activity, locale)
+
+        // Invalidate cached values to use the new locale
+        FxNimbus.features.nimbusValidation.withCachedValue(null)
         activity.recreate()
         activity.overridePendingTransition(0, 0)
     }
@@ -40,8 +48,12 @@ class DefaultLocaleSettingsController(
             return
         }
         localeSettingsStore.dispatch(LocaleSettingsAction.Select(localeSettingsStore.state.localeList[0]))
+        browserStore.dispatch(SearchAction.RefreshSearchEnginesAction)
         LocaleManager.resetToSystemDefault(activity, localeUseCase)
         LocaleManager.updateBaseConfiguration(activity, localeSettingsStore.state.localeList[0])
+
+        // Invalidate cached values to use the default locale
+        FxNimbus.features.nimbusValidation.withCachedValue(null)
         activity.recreate()
         activity.overridePendingTransition(0, 0)
     }

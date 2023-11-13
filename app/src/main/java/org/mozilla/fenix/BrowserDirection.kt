@@ -16,6 +16,7 @@ import androidx.annotation.IdRes
 enum class BrowserDirection(@IdRes val fragmentId: Int) {
     FromGlobal(0),
     FromHome(R.id.homeFragment),
+    FromWallpaper(R.id.wallpaperSettingsFragment),
     FromSearchDialog(R.id.searchDialogFragment),
     FromSettings(R.id.settingsFragment),
     FromBookmarks(R.id.bookmarkFragment),
@@ -27,6 +28,7 @@ enum class BrowserDirection(@IdRes val fragmentId: Int) {
     FromAbout(R.id.aboutFragment),
     FromTrackingProtection(R.id.trackingProtectionFragment),
     FromHttpsOnlyMode(R.id.httpsOnlyFragment),
+    FromCookieBanner(R.id.cookieBannerFragment),
     FromTrackingProtectionDialog(R.id.trackingProtectionPanelDialogFragment),
     FromSavedLoginsFragment(R.id.savedLoginsFragment),
     FromAddNewDeviceFragment(R.id.addNewDeviceFragment),
@@ -37,5 +39,5 @@ enum class BrowserDirection(@IdRes val fragmentId: Int) {
     FromAddonPermissionsDetailsFragment(R.id.addonPermissionsDetailFragment),
     FromLoginDetailFragment(R.id.loginDetailFragment),
     FromTabsTray(R.id.tabsTrayFragment),
-    FromRecentlyClosed(R.id.recentlyClosedFragment)
+    FromRecentlyClosed(R.id.recentlyClosedFragment),
 }

@@ -5,7 +5,6 @@
 package org.mozilla.fenix.home.collections
 
 import android.content.Context
-import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,7 +34,6 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import mozilla.components.browser.state.state.recover.RecoverableTab
@@ -43,10 +41,10 @@ import mozilla.components.concept.engine.Engine
 import mozilla.components.feature.tab.collections.Tab
 import org.mozilla.fenix.R.drawable
 import org.mozilla.fenix.R.string
+import org.mozilla.fenix.compose.annotation.LightDarkPreview
 import org.mozilla.fenix.compose.list.FaviconListItem
 import org.mozilla.fenix.ext.toShortUrl
 import org.mozilla.fenix.theme.FirefoxTheme
-import org.mozilla.fenix.theme.Theme
 
 /**
  * Rectangular shape with only right angles used to display a middle tab.
@@ -87,7 +85,7 @@ fun CollectionItem(
                 dismissDirection = dismissState.dismissDirection,
                 isLastInCollection = isLastInCollection,
             )
-        }
+        },
     ) {
         // We need to clip the top bounds to avoid this item drawing shadows over the above item.
         // But we need to add this shadows back to have a clearer separation between tabs
@@ -154,7 +152,7 @@ private fun DismissedTabBackground(
                     .padding(horizontal = 32.dp)
                     // Only show the delete icon for where the swipe starts.
                     .alpha(
-                        if (dismissDirection == StartToEnd) 1f else 0f
+                        if (dismissDirection == StartToEnd) 1f else 0f,
                     ),
                 tint = FirefoxTheme.colors.iconWarning,
             )
@@ -166,7 +164,7 @@ private fun DismissedTabBackground(
                     .padding(horizontal = 32.dp)
                     // Only show the delete icon for where the swipe starts.
                     .alpha(
-                        if (dismissDirection == EndToStart) 1f else 0f
+                        if (dismissDirection == EndToStart) 1f else 0f,
                     ),
                 tint = FirefoxTheme.colors.iconWarning,
             )
@@ -184,18 +182,17 @@ private fun Modifier.clipTop() = this.then(
             left = 0f - paddingPx,
             top = 0f,
             right = size.width + paddingPx,
-            bottom = size.height + paddingPx
+            bottom = size.height + paddingPx,
         ) {
             this@drawWithContent.drawContent()
         }
-    }
+    },
 )
 
 @Composable
-@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES)
-@Preview(uiMode = Configuration.UI_MODE_NIGHT_NO)
+@LightDarkPreview
 private fun TabInCollectionPreview() {
-    FirefoxTheme(theme = Theme.getTheme(isPrivate = false)) {
+    FirefoxTheme {
         Column {
             Box(modifier = Modifier.height(56.dp)) {
                 DismissedTabBackground(
@@ -236,6 +233,6 @@ private val tabPreview = object : Tab {
     override fun restore(
         context: Context,
         engine: Engine,
-        restoreSessionId: Boolean
+        restoreSessionId: Boolean,
     ): RecoverableTab? = null
 }

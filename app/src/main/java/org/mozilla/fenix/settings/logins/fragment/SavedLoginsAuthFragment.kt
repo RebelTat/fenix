@@ -4,7 +4,6 @@
 
 package org.mozilla.fenix.settings.logins.fragment
 
-import android.app.Activity.RESULT_OK
 import android.app.KeyguardManager
 import android.content.Context
 import android.content.DialogInterface
@@ -12,6 +11,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings.ACTION_SECURITY_SETTINGS
 import android.view.View
+import androidx.activity.result.ActivityResultLauncher
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.getSystemService
 import androidx.lifecycle.lifecycleScope
@@ -29,6 +29,7 @@ import mozilla.components.support.base.feature.ViewBoundFeatureWrapper
 import org.mozilla.fenix.GleanMetrics.Logins
 import org.mozilla.fenix.R
 import org.mozilla.fenix.ext.components
+import org.mozilla.fenix.ext.registerForActivityResult
 import org.mozilla.fenix.ext.requireComponents
 import org.mozilla.fenix.ext.runIfFragmentIsAttached
 import org.mozilla.fenix.ext.secure
@@ -42,6 +43,15 @@ import org.mozilla.fenix.settings.requirePreference
 @Suppress("TooManyFunctions")
 class SavedLoginsAuthFragment : PreferenceFragmentCompat() {
     private val biometricPromptFeature = ViewBoundFeatureWrapper<BiometricPromptFeature>()
+    private lateinit var startForResult: ActivityResultLauncher<Intent>
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        startForResult = registerForActivityResult {
+            navigateToSavedLoginsFragment()
+        }
+    }
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         setPreferencesFromResource(R.xml.logins_preferences, rootKey)
@@ -77,10 +87,10 @@ class SavedLoginsAuthFragment : PreferenceFragmentCompat() {
                 context = requireContext(),
                 fragment = this,
                 onAuthFailure = { togglePrefsEnabledWhileAuthenticating(true) },
-                onAuthSuccess = ::navigateToSavedLogins
+                onAuthSuccess = ::navigateToSavedLogins,
             ),
             owner = this,
-            view = view
+            view = view,
         )
     }
 
@@ -94,7 +104,7 @@ class SavedLoginsAuthFragment : PreferenceFragmentCompat() {
                     R.string.preferences_passwords_save_logins_ask_to_save
                 } else {
                     R.string.preferences_passwords_save_logins_never_save
-                }
+                },
             )
             setOnPreferenceClickListener {
                 navigateToSaveLoginSettingFragment()
@@ -116,11 +126,11 @@ class SavedLoginsAuthFragment : PreferenceFragmentCompat() {
         requirePreference<SwitchPreference>(R.string.pref_key_autofill_logins).apply {
             title = context.getString(
                 R.string.preferences_passwords_autofill2,
-                getString(R.string.app_name)
+                getString(R.string.app_name),
             )
             summary = context.getString(
                 R.string.preferences_passwords_autofill_description,
-                getString(R.string.app_name)
+                getString(R.string.app_name),
             )
             isChecked = context.settings().shouldAutofillLogins
             onPreferenceChangeListener = object : SharedPreferenceUpdater() {
@@ -146,7 +156,7 @@ class SavedLoginsAuthFragment : PreferenceFragmentCompat() {
                 .getString(R.string.preferences_passwords_sync_logins_across_devices),
             loggedInTitle = requireContext()
                 .getString(R.string.preferences_passwords_sync_logins),
-            onSignInToSyncClicked = {
+            onSyncSignInClicked = {
                 val directions =
                     SavedLoginsAuthFragmentDirections.actionSavedLoginsAuthFragmentToTurnOnSyncFragment()
                 findNavController().navigate(directions)
@@ -155,7 +165,7 @@ class SavedLoginsAuthFragment : PreferenceFragmentCompat() {
                 val directions =
                     SavedLoginsAuthFragmentDirections.actionGlobalAccountProblemFragment()
                 findNavController().navigate(directions)
-            }
+            },
         )
 
         togglePrefsEnabledWhileAuthenticating(true)
@@ -188,7 +198,7 @@ class SavedLoginsAuthFragment : PreferenceFragmentCompat() {
         AlertDialog.Builder(context).apply {
             setTitle(getString(R.string.logins_warning_dialog_title))
             setMessage(
-                getString(R.string.logins_warning_dialog_message)
+                getString(R.string.logins_warning_dialog_message),
             )
 
             setNegativeButton(getString(R.string.logins_warning_dialog_later)) { _: DialogInterface, _ ->
@@ -205,29 +215,26 @@ class SavedLoginsAuthFragment : PreferenceFragmentCompat() {
         context.settings().incrementSecureWarningCount()
     }
 
-    @Suppress("Deprecation") // This is only used when BiometricPrompt is unavailable
+    @Suppress("Deprecation")
     private fun showPinVerification(manager: KeyguardManager) {
         val intent = manager.createConfirmDeviceCredentialIntent(
             getString(R.string.logins_biometric_prompt_message_pin),
-            getString(R.string.logins_biometric_prompt_message)
+            getString(R.string.logins_biometric_prompt_message),
         )
-        startActivityForResult(intent, PIN_REQUEST)
-    }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        if (requestCode == PIN_REQUEST && resultCode == RESULT_OK) {
-            navigateToSavedLoginsFragment()
-        }
+        startForResult.launch(intent)
     }
 
     /**
      * Called when authentication succeeds.
      */
     private fun navigateToSavedLoginsFragment() {
-        Logins.openLogins.record(NoExtras())
-        val directions =
-            SavedLoginsAuthFragmentDirections.actionSavedLoginsAuthFragmentToLoginsListFragment()
-        findNavController().navigate(directions)
+        if (findNavController().currentDestination?.id == R.id.savedLoginsAuthFragment) {
+            Logins.openLogins.record(NoExtras())
+            val directions =
+                SavedLoginsAuthFragmentDirections.actionSavedLoginsAuthFragmentToLoginsListFragment()
+            findNavController().navigate(directions)
+        }
     }
 
     private fun navigateToSaveLoginSettingFragment() {

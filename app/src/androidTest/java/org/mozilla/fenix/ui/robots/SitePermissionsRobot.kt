@@ -6,6 +6,7 @@ package org.mozilla.fenix.ui.robots
 
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.assertion.ViewAssertions.matches
+import androidx.test.espresso.matcher.ViewMatchers
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.uiautomator.UiSelector
@@ -15,6 +16,7 @@ import org.mozilla.fenix.R
 import org.mozilla.fenix.helpers.TestAssetHelper.waitingTime
 import org.mozilla.fenix.helpers.TestHelper
 import org.mozilla.fenix.helpers.TestHelper.getPermissionAllowID
+import org.mozilla.fenix.helpers.TestHelper.mDevice
 import org.mozilla.fenix.helpers.TestHelper.packageName
 import org.mozilla.fenix.helpers.click
 
@@ -30,7 +32,7 @@ class SitePermissionsRobot {
     fun verifyMicrophonePermissionPrompt(url: String) {
         assertTrue(
             mDevice.findObject(UiSelector().text("Allow $url to use your microphone?"))
-                .waitForExists(waitingTime)
+                .waitForExists(waitingTime),
         )
         assertTrue(denyPagePermissionButton.text.equals("Don’t allow"))
         assertTrue(allowPagePermissionButton.text.equals("Allow"))
@@ -39,7 +41,7 @@ class SitePermissionsRobot {
     fun verifyCameraPermissionPrompt(url: String) {
         assertTrue(
             mDevice.findObject(UiSelector().text("Allow $url to use your camera?"))
-                .waitForExists(waitingTime)
+                .waitForExists(waitingTime),
         )
         assertTrue(denyPagePermissionButton.text.equals("Don’t allow"))
         assertTrue(allowPagePermissionButton.text.equals("Allow"))
@@ -48,7 +50,7 @@ class SitePermissionsRobot {
     fun verifyAudioVideoPermissionPrompt(url: String) {
         assertTrue(
             mDevice.findObject(UiSelector().text("Allow $url to use your camera and microphone?"))
-                .waitForExists(waitingTime)
+                .waitForExists(waitingTime),
         )
         assertTrue(denyPagePermissionButton.text.equals("Don’t allow"))
         assertTrue(allowPagePermissionButton.text.equals("Allow"))
@@ -57,7 +59,7 @@ class SitePermissionsRobot {
     fun verifyLocationPermissionPrompt(url: String) {
         assertTrue(
             mDevice.findObject(UiSelector().text("Allow $url to use your location?"))
-                .waitForExists(waitingTime)
+                .waitForExists(waitingTime),
         )
         assertTrue(denyPagePermissionButton.text.equals("Don’t allow"))
         assertTrue(allowPagePermissionButton.text.equals("Allow"))
@@ -67,7 +69,7 @@ class SitePermissionsRobot {
         if (!blocked) {
             assertTrue(
                 mDevice.findObject(UiSelector().text("Allow $url to send notifications?"))
-                    .waitForExists(waitingTime)
+                    .waitForExists(waitingTime),
             )
             assertTrue(denyPagePermissionButton.text.equals("Never"))
             assertTrue(allowPagePermissionButton.text.equals("Always"))
@@ -76,9 +78,19 @@ class SitePermissionsRobot {
                the Notifications permission prompt won't be displayed anymore */
             assertFalse(
                 mDevice.findObject(UiSelector().text("Allow $url to send notifications?"))
-                    .exists()
+                    .exists(),
             )
         }
+    }
+
+    fun verifyCrossOriginCookiesPermissionPrompt(originSite: String, currentSite: String) {
+        mDevice.findObject(UiSelector().text("Allow $originSite to use its cookies on $currentSite?"))
+            .waitForExists(waitingTime)
+        onView(ViewMatchers.withText("Allow $originSite to use its cookies on $currentSite?")).check(matches(isDisplayed()))
+        onView(ViewMatchers.withText("You may want to block access if it's not clear why $originSite needs this data.")).check(matches(isDisplayed()))
+        onView(ViewMatchers.withText("Learn more")).check(matches(isDisplayed()))
+        onView(ViewMatchers.withText("Block")).check(matches(isDisplayed()))
+        onView(ViewMatchers.withText("Allow")).check(matches(isDisplayed()))
     }
 
     fun selectRememberPermissionDecision() {

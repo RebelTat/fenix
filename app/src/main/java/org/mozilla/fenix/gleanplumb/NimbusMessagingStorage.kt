@@ -13,6 +13,7 @@ import org.mozilla.experiments.nimbus.GleanPlumbMessageHelper
 import org.mozilla.experiments.nimbus.internal.FeatureHolder
 import org.mozilla.experiments.nimbus.internal.NimbusException
 import org.mozilla.fenix.nimbus.ControlMessageBehavior
+import org.mozilla.fenix.nimbus.MessageSurfaceId
 import org.mozilla.fenix.nimbus.Messaging
 import org.mozilla.fenix.nimbus.StyleData
 
@@ -38,7 +39,7 @@ class NimbusMessagingStorage(
     private val reportMalformedMessage: (String) -> Unit,
     private val gleanPlumb: GleanPlumbInterface,
     private val messagingFeature: FeatureHolder<Messaging>,
-    private val attributeProvider: CustomAttributeProvider? = null
+    private val attributeProvider: CustomAttributeProvider? = null,
 ) {
     /**
      * Contains all malformed messages where they key can be the value or a trigger of the message
@@ -63,34 +64,35 @@ class NimbusMessagingStorage(
         val defaultStyle = StyleData()
         val storageMetadata = metadataStorage.getMetadata()
 
-        return nimbusMessages.mapNotNull { (key, value) ->
-            val action = sanitizeAction(key, value.action, nimbusActions, value.isControl) ?: return@mapNotNull null
-            Message(
-                id = key,
-                data = value,
-                action = action,
-                style = nimbusStyles[value.style] ?: defaultStyle,
-                metadata = storageMetadata[key] ?: addMetadata(key),
-                triggers = sanitizeTriggers(key, value.trigger, nimbusTriggers)
-                    ?: return@mapNotNull null
-            )
-        }.filter {
-            it.maxDisplayCount >= it.metadata.displayCount &&
-                !it.metadata.dismissed &&
-                !it.metadata.pressed
-        }.sortedByDescending {
-            it.style.priority
-        }
+        return nimbusMessages
+            .mapNotNull { (key, value) ->
+                val action = sanitizeAction(key, value.action, nimbusActions, value.isControl) ?: return@mapNotNull null
+                Message(
+                    id = key,
+                    data = value,
+                    action = action,
+                    style = nimbusStyles[value.style] ?: defaultStyle,
+                    metadata = storageMetadata[key] ?: addMetadata(key),
+                    triggers = sanitizeTriggers(key, value.trigger, nimbusTriggers)
+                        ?: return@mapNotNull null,
+                )
+            }.filter {
+                it.maxDisplayCount >= it.metadata.displayCount &&
+                    !it.metadata.dismissed &&
+                    !it.metadata.pressed
+            }.sortedByDescending {
+                it.style.priority
+            }
     }
 
     /**
      * Returns the next higher priority message which all their triggers are true.
      */
-    fun getNextMessage(availableMessages: List<Message>): Message? {
+    fun getNextMessage(surface: MessageSurfaceId, availableMessages: List<Message>): Message? {
         val jexlCache = HashMap<String, Boolean>()
         val helper = gleanPlumb.createMessageHelper(customAttributes)
         val message = availableMessages.firstOrNull {
-            isMessageEligible(it, helper, jexlCache)
+            surface == it.surface && isMessageEligible(it, helper, jexlCache)
         } ?: return null
 
         // Check this isn't an experimental message. If not, we can go ahead and return it.
@@ -117,13 +119,25 @@ class NimbusMessagingStorage(
     }
 
     /**
-     * Returns a pair of uuid and valid action for the provided [message].
+     * Returns a pair of uuid and valid action for the provided [action].
+     *
+     * Uses Nimbus' targeting attributes to do basic string interpolation.
+     *
+     * e.g.
+     * `https://example.com/{locale}/whatsnew.html?version={app_version}`
+     *
+     * If the string `{uuid}` is detected in the [action] string, then it is
+     * replaced with a random UUID. This is returned as the first value of the returned
+     * [Pair].
+     *
+     * The fully resolved (with all substitutions) action is returned as the second value
+     * of the [Pair].
      */
-    fun getMessageAction(message: Message): Pair<String?, String> {
+    fun generateUuidAndFormatAction(action: String): Pair<String?, String> {
         val helper = gleanPlumb.createMessageHelper(customAttributes)
-        val uuid = helper.getUuid(message.action)
+        val uuid = helper.getUuid(action)
 
-        return Pair(uuid, helper.stringFormat(message.action, uuid))
+        return Pair(uuid, helper.stringFormat(action, uuid))
     }
 
     /**
@@ -138,9 +152,8 @@ class NimbusMessagingStorage(
         messageId: String,
         unsafeAction: String,
         nimbusActions: Map<String, String>,
-        isControl: Boolean
+        isControl: Boolean,
     ): String? {
-
         return when {
             unsafeAction.startsWith("http") -> {
                 unsafeAction
@@ -164,7 +177,7 @@ class NimbusMessagingStorage(
     internal fun sanitizeTriggers(
         messageId: String,
         unsafeTriggers: List<String>,
-        nimbusTriggers: Map<String, String>
+        nimbusTriggers: Map<String, String>,
     ): List<String>? {
         return unsafeTriggers.map {
             val safeTrigger = nimbusTriggers[it]
@@ -198,7 +211,7 @@ class NimbusMessagingStorage(
     internal fun isMessageEligible(
         message: Message,
         helper: GleanPlumbMessageHelper,
-        jexlCache: MutableMap<String, Boolean> = mutableMapOf()
+        jexlCache: MutableMap<String, Boolean> = mutableMapOf(),
     ): Boolean {
         return message.triggers.all { condition ->
             jexlCache[condition]
@@ -225,7 +238,7 @@ class NimbusMessagingStorage(
         return metadataStorage.addMetadata(
             Message.Metadata(
                 id = id,
-            )
+            ),
         )
     }
 }

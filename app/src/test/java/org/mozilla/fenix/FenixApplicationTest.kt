@@ -142,7 +142,6 @@ class FenixApplicationTest {
         every { settings.historyMetadataUIFeature } returns true
         every { settings.showPocketRecommendationsFeature } returns true
         every { settings.showContileFeature } returns true
-        every { settings.searchTermTabGroupsAreEnabled } returns true
         every { application.reportHomeScreenMetrics(settings) } just Runs
         every { settings.inactiveTabsAreEnabled } returns true
 
@@ -180,7 +179,6 @@ class FenixApplicationTest {
         assertEquals(true, Preferences.voiceSearchEnabled.testGetValue())
         assertEquals(true, Preferences.openLinksInAppEnabled.testGetValue())
         assertEquals(true, Preferences.signedInSync.testGetValue())
-        assertEquals(true, Preferences.searchTermGroupsEnabled.testGetValue())
         assertEquals(emptyList<String>(), Preferences.syncItems.testGetValue())
         assertEquals("fixed_top", Preferences.toolbarPositionSetting.testGetValue())
         assertEquals("standard", Preferences.enhancedTrackingProtection.testGetValue())
@@ -204,5 +202,18 @@ class FenixApplicationTest {
 
         assertEquals(contextId, TopSites.contextId.testGetValue()!!.toString())
         assertEquals(contextId, settings.contileContextId)
+    }
+
+    @Test
+    fun `GIVEN the current etp mode is custom WHEN tracking the etp metric THEN track also the cookies option`() {
+        val settings: Settings = mockk(relaxed = true) {
+            every { shouldUseTrackingProtection } returns true
+            every { useCustomTrackingProtection } returns true
+            every { blockCookiesSelectionInCustomTrackingProtection } returns "Test"
+        }
+
+        application.setStartupMetrics(browserStore, settings, browsersCache, mozillaProductDetector)
+
+        assertEquals("Test", Preferences.etpCustomCookiesSelection.testGetValue())
     }
 }

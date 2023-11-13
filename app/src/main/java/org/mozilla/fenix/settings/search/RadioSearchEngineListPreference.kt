@@ -20,7 +20,6 @@ import androidx.preference.Preference
 import androidx.preference.PreferenceViewHolder
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import mozilla.components.browser.state.search.SearchEngine
@@ -35,12 +34,13 @@ import org.mozilla.fenix.R
 import org.mozilla.fenix.databinding.SearchEngineRadioButtonBinding
 import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.ext.getRootView
+import org.mozilla.fenix.ext.settings
 import org.mozilla.fenix.utils.allowUndo
 
 class RadioSearchEngineListPreference @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
-    defStyleAttr: Int = android.R.attr.preferenceStyle
+    defStyleAttr: Int = android.R.attr.preferenceStyle,
 ) : Preference(context, attrs, defStyleAttr), CompoundButton.OnCheckedChangeListener {
     private val itemResId: Int
         get() = R.layout.search_engine_radio_button
@@ -54,7 +54,7 @@ class RadioSearchEngineListPreference @JvmOverloads constructor(
 
         subscribeToSearchEngineUpdates(
             context.components.core.store,
-            holder.itemView
+            holder.itemView,
         )
     }
 
@@ -73,18 +73,27 @@ class RadioSearchEngineListPreference @JvmOverloads constructor(
         val layoutInflater = LayoutInflater.from(context)
         val layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
+            ViewGroup.LayoutParams.WRAP_CONTENT,
         )
 
+        val isLastGeneralOrCustomSearchEngine = state.searchEngines.filter {
+            it.isGeneral
+        }.size == 1
         state.searchEngines.filter { engine ->
             engine.type != SearchEngine.Type.APPLICATION
         }.forEach { engine ->
+            val isLastSearchEngineAvailable =
+                state.searchEngines.count { it.type != SearchEngine.Type.APPLICATION } > 1
             val searchEngineView = makeButtonFromSearchEngine(
                 engine = engine,
                 layoutInflater = layoutInflater,
                 res = context.resources,
-                allowDeletion = state.searchEngines.size > 1,
-                isSelected = engine == state.selectedOrDefaultSearchEngine
+                allowDeletion = if (context.settings().showUnifiedSearchFeature) {
+                    isLastSearchEngineAvailable && !(engine.isGeneral && isLastGeneralOrCustomSearchEngine)
+                } else {
+                    isLastSearchEngineAvailable
+                },
+                isSelected = engine == state.selectedOrDefaultSearchEngine,
             )
 
             searchEngineGroup.addView(searchEngineView, layoutParams)
@@ -96,7 +105,7 @@ class RadioSearchEngineListPreference @JvmOverloads constructor(
         layoutInflater: LayoutInflater,
         res: Resources,
         allowDeletion: Boolean,
-        isSelected: Boolean
+        isSelected: Boolean,
     ): View {
         val isCustomSearchEngine = engine.type == SearchEngine.Type.CUSTOM
 
@@ -104,7 +113,12 @@ class RadioSearchEngineListPreference @JvmOverloads constructor(
 
         val binding = SearchEngineRadioButtonBinding.bind(wrapper)
 
-        wrapper.setOnClickListener { binding.radioButton.isChecked = true }
+        if (context.settings().showUnifiedSearchFeature && !engine.isGeneral) {
+            binding.radioButton.isEnabled = false
+            wrapper.isEnabled = false
+        } else {
+            wrapper.setOnClickListener { binding.radioButton.isChecked = true }
+        }
         binding.radioButton.tag = engine.id
         binding.radioButton.isChecked = isSelected
         binding.radioButton.setOnCheckedChangeListener(this)
@@ -120,10 +134,10 @@ class RadioSearchEngineListPreference @JvmOverloads constructor(
                         is SearchEngineMenu.Item.Edit -> editCustomSearchEngine(wrapper, engine)
                         is SearchEngineMenu.Item.Delete -> deleteSearchEngine(
                             context,
-                            engine
+                            engine,
                         )
                     }
-                }
+                },
             ).menuBuilder.build(context).show(binding.overflowMenu)
         }
         val iconSize = res.getDimension(R.dimen.preference_icon_drawable_size).toInt()
@@ -138,7 +152,7 @@ class RadioSearchEngineListPreference @JvmOverloads constructor(
         val engine = requireNotNull(
             context.components.core.store.state.search.searchEngines.find { searchEngine ->
                 searchEngine.id == searchEngineId
-            }
+            },
         )
 
         context.components.useCases.searchUseCases.selectSearchEngine(engine)
@@ -153,8 +167,21 @@ class RadioSearchEngineListPreference @JvmOverloads constructor(
 
     private fun deleteSearchEngine(
         context: Context,
-        engine: SearchEngine
+        engine: SearchEngine,
     ) {
+        val selectedOrDefaultSearchEngine = context.components.core.store.state.search.selectedOrDefaultSearchEngine
+        if (selectedOrDefaultSearchEngine == engine) {
+            val nextSearchEngine = if (context.settings().showUnifiedSearchFeature) {
+                context.components.core.store.state.search.searchEngines.first {
+                    it.id != engine.id && (it.isGeneral || it.type == SearchEngine.Type.CUSTOM)
+                }
+            } else {
+                context.components.core.store.state.search.searchEngines.first {
+                    it.id != engine.id
+                }
+            }
+            context.components.useCases.searchUseCases.selectSearchEngine(nextSearchEngine)
+        }
         context.components.useCases.searchUseCases.removeSearchEngine(engine)
 
         MainScope().allowUndo(
@@ -164,8 +191,11 @@ class RadioSearchEngineListPreference @JvmOverloads constructor(
             undoActionTitle = context.getString(R.string.snackbar_deleted_undo),
             onCancel = {
                 context.components.useCases.searchUseCases.addSearchEngine(engine)
+                if (selectedOrDefaultSearchEngine == engine) {
+                    context.components.useCases.searchUseCases.selectSearchEngine(engine)
+                }
             },
-            operation = {}
+            operation = {},
         )
     }
 }

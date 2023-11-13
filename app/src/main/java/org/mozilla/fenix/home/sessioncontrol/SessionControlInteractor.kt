@@ -27,6 +27,9 @@ import org.mozilla.fenix.home.recentvisits.RecentlyVisitedItem.RecentHistoryGrou
 import org.mozilla.fenix.home.recentvisits.RecentlyVisitedItem.RecentHistoryHighlight
 import org.mozilla.fenix.home.recentvisits.controller.RecentVisitsController
 import org.mozilla.fenix.home.recentvisits.interactor.RecentVisitsInteractor
+import org.mozilla.fenix.search.toolbar.SearchSelectorInteractor
+import org.mozilla.fenix.search.toolbar.SearchSelectorMenu
+import org.mozilla.fenix.wallpapers.WallpaperState
 
 /**
  * Interface for tab related actions in the [SessionControlInteractor].
@@ -130,11 +133,6 @@ interface CollectionInteractor {
      * User has removed the collections placeholder from home.
      */
     fun onRemoveCollectionsPlaceholder()
-
-    /**
-     * User has opened collection 3 dot menu.
-     */
-    fun onCollectionMenuOpened()
 }
 
 interface ToolbarInteractor {
@@ -164,10 +162,13 @@ interface OnboardingInteractor {
     fun onReadPrivacyNoticeClicked()
 
     /**
-     * Show the onboarding dialog to onboard users about recentTabs,recentBookmarks,
-     * historyMetadata and pocketArticles sections.
+     * Show Wallpapers onboarding dialog to onboard users about the feature if conditions are met.
+     * Returns true if the call has been passed down to the controller.
+     *
+     * @param state The wallpaper state.
+     * @return Whether the onboarding dialog is currently shown.
      */
-    fun showOnboardingDialog()
+    fun showWallpapersOnboardingDialog(state: WallpaperState): Boolean
 }
 
 interface CustomizeHomeIteractor {
@@ -222,11 +223,6 @@ interface TopSiteInteractor {
      * "Our sponsors & your privacy" top site menu item.
      */
     fun onSponsorPrivacyClicked()
-
-    /**
-     * Called when top site menu is opened.
-     */
-    fun onTopSiteMenuOpened()
 }
 
 interface MessageCardInteractor {
@@ -254,7 +250,7 @@ class SessionControlInteractor(
     private val recentSyncedTabController: RecentSyncedTabController,
     private val recentBookmarksController: RecentBookmarksController,
     private val recentVisitsController: RecentVisitsController,
-    private val pocketStoriesController: PocketStoriesController
+    private val pocketStoriesController: PocketStoriesController,
 ) : CollectionInteractor,
     OnboardingInteractor,
     TopSiteInteractor,
@@ -266,7 +262,8 @@ class SessionControlInteractor(
     RecentBookmarksInteractor,
     RecentVisitsInteractor,
     CustomizeHomeIteractor,
-    PocketStoriesInteractor {
+    PocketStoriesInteractor,
+    SearchSelectorInteractor {
 
     override fun onCollectionAddTabTapped(collection: TabCollection) {
         controller.handleCollectionAddTabTapped(collection)
@@ -328,8 +325,8 @@ class SessionControlInteractor(
         controller.handleReadPrivacyNoticeClicked()
     }
 
-    override fun showOnboardingDialog() {
-        controller.handleShowOnboardingDialog()
+    override fun showWallpapersOnboardingDialog(state: WallpaperState): Boolean {
+        return controller.handleShowWallpapersOnboardingDialog(state)
     }
 
     override fun onToggleCollectionExpanded(collection: TabCollection, expand: Boolean) {
@@ -360,20 +357,8 @@ class SessionControlInteractor(
         controller.handleRemoveCollectionsPlaceholder()
     }
 
-    override fun onCollectionMenuOpened() {
-        controller.handleMenuOpened()
-    }
-
-    override fun onTopSiteMenuOpened() {
-        controller.handleMenuOpened()
-    }
-
     override fun onRecentTabClicked(tabId: String) {
         recentTabController.handleRecentTabClicked(tabId)
-    }
-
-    override fun onRecentSearchGroupClicked(tabId: String) {
-        recentTabController.handleRecentSearchGroupClicked(tabId)
     }
 
     override fun onRecentTabShowAllClicked() {
@@ -390,6 +375,10 @@ class SessionControlInteractor(
 
     override fun onSyncedTabShowAllClicked() {
         recentSyncedTabController.handleSyncedTabShowAllClicked()
+    }
+
+    override fun onRemovedRecentSyncedTab(tab: RecentSyncedTab) {
+        recentSyncedTabController.handleRecentSyncedTabRemoved(tab)
     }
 
     override fun onRecentBookmarkClicked(bookmark: RecentBookmark) {
@@ -410,7 +399,7 @@ class SessionControlInteractor(
 
     override fun onRecentHistoryGroupClicked(recentHistoryGroup: RecentHistoryGroup) {
         recentVisitsController.handleRecentHistoryGroupClicked(
-            recentHistoryGroup
+            recentHistoryGroup,
         )
     }
 
@@ -464,5 +453,9 @@ class SessionControlInteractor(
 
     override fun onMessageClosedClicked(message: Message) {
         controller.handleMessageClosed(message)
+    }
+
+    override fun onMenuItemTapped(item: SearchSelectorMenu.Item) {
+        controller.handleMenuItemTapped(item)
     }
 }

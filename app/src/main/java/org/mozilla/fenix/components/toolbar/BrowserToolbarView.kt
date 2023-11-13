@@ -15,14 +15,13 @@ import androidx.annotation.VisibleForTesting
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
-import mozilla.components.browser.domains.autocomplete.ShippedDomainsProvider
 import mozilla.components.browser.state.selector.selectedTab
 import mozilla.components.browser.state.state.CustomTabSessionState
 import mozilla.components.browser.state.state.ExternalAppType
 import mozilla.components.browser.toolbar.BrowserToolbar
 import mozilla.components.browser.toolbar.behavior.BrowserToolbarBehavior
 import mozilla.components.browser.toolbar.display.DisplayToolbar
-import mozilla.components.support.utils.URLStringUtils
+import mozilla.components.support.ktx.util.URLStringUtils
 import org.mozilla.fenix.R
 import org.mozilla.fenix.components.toolbar.interactor.BrowserToolbarInteractor
 import org.mozilla.fenix.customtabs.CustomTabToolbarIntegration
@@ -42,7 +41,7 @@ class BrowserToolbarView(
     private val settings: Settings,
     private val interactor: BrowserToolbarInteractor,
     private val customTabSession: CustomTabSessionState?,
-    private val lifecycleOwner: LifecycleOwner
+    private val lifecycleOwner: LifecycleOwner,
 ) {
 
     @LayoutRes
@@ -73,7 +72,7 @@ class BrowserToolbarView(
                 WeakReference(view),
                 customTabSession?.id,
                 interactor::onBrowserToolbarPasteAndGo,
-                interactor::onBrowserToolbarPaste
+                interactor::onBrowserToolbarPaste,
             )
             true
         }
@@ -101,15 +100,15 @@ class BrowserToolbarView(
 
                 val primaryTextColor = ContextCompat.getColor(
                     context,
-                    ThemeManager.resolveAttribute(R.attr.textPrimary, context)
+                    ThemeManager.resolveAttribute(R.attr.textPrimary, context),
                 )
                 val secondaryTextColor = ContextCompat.getColor(
                     context,
-                    ThemeManager.resolveAttribute(R.attr.textSecondary, context)
+                    ThemeManager.resolveAttribute(R.attr.textSecondary, context),
                 )
                 val separatorColor = ContextCompat.getColor(
                     context,
-                    ThemeManager.resolveAttribute(R.attr.borderPrimary, context)
+                    ThemeManager.resolveAttribute(R.attr.borderPrimary, context),
                 )
 
                 display.urlFormatter = { url -> URLStringUtils.toDisplayUrl(url) }
@@ -124,8 +123,8 @@ class BrowserToolbarView(
                     trackingProtection = primaryTextColor,
                     highlight = ContextCompat.getColor(
                         context,
-                        R.color.fx_mobile_icon_color_information
-                    )
+                        R.color.fx_mobile_icon_color_information,
+                    ),
                 )
 
                 display.hint = context.getString(R.string.search_hint)
@@ -141,7 +140,7 @@ class BrowserToolbarView(
                     onItemTapped = {
                         it.performHapticIfNeeded(view)
                         interactor.onBrowserToolbarMenuItemTapped(it)
-                    }
+                    },
                 )
             } else {
                 menuToolbar = DefaultToolbarMenu(
@@ -155,7 +154,7 @@ class BrowserToolbarView(
                     lifecycleOwner = lifecycleOwner,
                     bookmarksStorage = bookmarkStorage,
                     pinnedSiteStorage = components.core.pinnedSiteStorage,
-                    isPinningSupported = isPinningSupported
+                    isPinningSupported = isPinningSupported,
                 )
                 view.display.setMenuDismissAction {
                     view.invalidateActions()
@@ -168,20 +167,17 @@ class BrowserToolbarView(
                     view,
                     menuToolbar,
                     customTabSession.id,
-                    isPrivate = customTabSession.content.private
+                    isPrivate = customTabSession.content.private,
                 )
             } else {
                 DefaultToolbarIntegration(
                     this,
                     view,
                     menuToolbar,
-                    ShippedDomainsProvider().also { it.initialize(this) },
-                    components.core.historyStorage,
                     lifecycleOwner,
                     sessionId = null,
                     isPrivate = components.core.store.state.selectedTab?.content?.private ?: false,
                     interactor = interactor,
-                    engine = components.core.engine
                 )
             }
         }

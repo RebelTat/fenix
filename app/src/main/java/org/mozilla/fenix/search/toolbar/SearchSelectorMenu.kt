@@ -5,14 +5,17 @@
 package org.mozilla.fenix.search.toolbar
 
 import android.content.Context
-import androidx.annotation.VisibleForTesting
 import androidx.appcompat.content.res.AppCompatResources
 import mozilla.components.browser.menu2.BrowserMenuController
 import mozilla.components.browser.state.search.SearchEngine
 import mozilla.components.concept.menu.MenuController
+import mozilla.components.concept.menu.MenuStyle
+import mozilla.components.concept.menu.candidate.DecorativeTextMenuCandidate
 import mozilla.components.concept.menu.candidate.DrawableMenuIcon
+import mozilla.components.concept.menu.candidate.MenuCandidate
 import mozilla.components.concept.menu.candidate.TextMenuCandidate
 import mozilla.components.support.ktx.android.content.getColorFromAttr
+import mozilla.components.support.ktx.android.util.dpToPx
 import org.mozilla.fenix.R
 
 typealias MozSearchEngine = SearchEngine
@@ -25,7 +28,7 @@ typealias MozSearchEngine = SearchEngine
  */
 class SearchSelectorMenu(
     private val context: Context,
-    private val interactor: ToolbarInteractor
+    private val interactor: SearchSelectorInteractor,
 ) {
 
     /**
@@ -45,23 +48,34 @@ class SearchSelectorMenu(
         data class SearchEngine(val searchEngine: MozSearchEngine) : Item()
     }
 
-    val menuController: MenuController by lazy { BrowserMenuController() }
-
-    @VisibleForTesting
-    internal fun menuItems(): List<TextMenuCandidate> {
-        return listOf(
-            TextMenuCandidate(
-                text = context.getString(R.string.search_settings_menu_item),
-                start = DrawableMenuIcon(
-                    drawable = AppCompatResources.getDrawable(
-                        context,
-                        R.drawable.mozac_ic_settings
-                    ),
-                    tint = context.getColorFromAttr(R.attr.textPrimary)
-                )
-            ) {
-                interactor.onMenuItemTapped(Item.SearchSettings)
-            }
+    val menuController: MenuController by lazy {
+        BrowserMenuController(
+            style = MenuStyle(
+                // Adjusting the menu to have 4dp spacing. By default, search_selector has horizontal
+                // spacing of 8dp, and vertical spacing with the container view of 6dp.
+                horizontalOffset = (-4).dpToPx(context.resources.displayMetrics),
+                verticalOffset = (-2).dpToPx(context.resources.displayMetrics),
+                completelyOverlap = true,
+            ),
         )
+    }
+
+    internal fun menuItems(searchEngines: List<MenuCandidate>): List<MenuCandidate> {
+        val headerCandidate = DecorativeTextMenuCandidate(
+            text = context.getString(R.string.search_header_menu_item_2),
+        )
+        val settingsCandidate = TextMenuCandidate(
+            text = context.getString(R.string.search_settings_menu_item),
+            start = DrawableMenuIcon(
+                drawable = AppCompatResources.getDrawable(
+                    context,
+                    R.drawable.mozac_ic_settings,
+                ),
+                tint = context.getColorFromAttr(R.attr.textPrimary),
+            ),
+        ) {
+            interactor.onMenuItemTapped(Item.SearchSettings)
+        }
+        return listOf(headerCandidate) + searchEngines + listOf(settingsCandidate)
     }
 }

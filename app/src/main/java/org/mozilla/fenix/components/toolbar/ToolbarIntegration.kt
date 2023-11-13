@@ -5,17 +5,14 @@
 package org.mozilla.fenix.components.toolbar
 
 import android.content.Context
+import androidx.annotation.VisibleForTesting
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
-import mozilla.components.browser.domains.autocomplete.DomainAutocompleteProvider
 import mozilla.components.browser.state.selector.normalTabs
 import mozilla.components.browser.state.selector.privateTabs
 import mozilla.components.browser.toolbar.BrowserToolbar
 import mozilla.components.browser.toolbar.display.DisplayToolbar
-import mozilla.components.concept.engine.Engine
-import mozilla.components.concept.storage.HistoryStorage
 import mozilla.components.feature.tabs.toolbar.TabCounterToolbarButton
-import mozilla.components.feature.toolbar.ToolbarAutocompleteFeature
 import mozilla.components.feature.toolbar.ToolbarBehaviorController
 import mozilla.components.feature.toolbar.ToolbarFeature
 import mozilla.components.feature.toolbar.ToolbarPresenter
@@ -27,13 +24,16 @@ import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.ext.settings
 import org.mozilla.fenix.theme.ThemeManager
 
+/**
+ * Feature configuring the toolbar when in display mode.
+ */
 abstract class ToolbarIntegration(
     context: Context,
     toolbar: BrowserToolbar,
     toolbarMenu: ToolbarMenu,
     sessionId: String?,
     isPrivate: Boolean,
-    renderStyle: ToolbarFeature.RenderStyle
+    renderStyle: ToolbarFeature.RenderStyle,
 ) : LifecycleAwareFeature {
 
     val store = context.components.core.store
@@ -41,11 +41,12 @@ abstract class ToolbarIntegration(
         toolbar,
         store,
         sessionId,
+        context.settings().showUnifiedSearchFeature,
         ToolbarFeature.UrlRenderConfiguration(
             context.components.publicSuffixList,
             ThemeManager.resolveAttribute(R.attr.textPrimary, context),
-            renderStyle = renderStyle
-        )
+            renderStyle = renderStyle,
+        ),
     )
 
     private val menuPresenter =
@@ -79,21 +80,27 @@ class DefaultToolbarIntegration(
     context: Context,
     toolbar: BrowserToolbar,
     toolbarMenu: ToolbarMenu,
-    domainAutocompleteProvider: DomainAutocompleteProvider,
-    historyStorage: HistoryStorage,
     lifecycleOwner: LifecycleOwner,
     sessionId: String? = null,
     isPrivate: Boolean,
     interactor: BrowserToolbarInteractor,
-    engine: Engine
 ) : ToolbarIntegration(
     context = context,
     toolbar = toolbar,
     toolbarMenu = toolbarMenu,
     sessionId = sessionId,
     isPrivate = isPrivate,
-    renderStyle = ToolbarFeature.RenderStyle.UncoloredUrl
+    renderStyle = ToolbarFeature.RenderStyle.UncoloredUrl,
 ) {
+
+    @VisibleForTesting
+    internal var cfrPresenter = BrowserToolbarCFRPresenter(
+        context = context,
+        browserStore = context.components.core.store,
+        settings = context.settings(),
+        toolbar = toolbar,
+        sessionId = sessionId,
+    )
 
     init {
         toolbar.display.menuBuilder = toolbarMenu.menuBuilder
@@ -102,7 +109,7 @@ class DefaultToolbarIntegration(
         toolbar.display.indicators = listOf(
             DisplayToolbar.Indicators.SECURITY,
             DisplayToolbar.Indicators.EMPTY,
-            DisplayToolbar.Indicators.HIGHLIGHT
+            DisplayToolbar.Indicators.HIGHLIGHT,
         )
 
         val tabCounterMenu = FenixTabCounterMenu(
@@ -114,7 +121,7 @@ class DefaultToolbarIntegration(
                 ContextCompat.getColor(context, R.color.fx_mobile_private_text_color_primary)
             } else {
                 null
-            }
+            },
         ).also {
             it.updateMenu(context.settings().toolbarPosition)
         }
@@ -126,7 +133,7 @@ class DefaultToolbarIntegration(
                 interactor.onTabCounterClicked()
             },
             store = store,
-            menu = tabCounterMenu
+            menu = tabCounterMenu,
         )
 
         val tabCount = if (isPrivate) {
@@ -138,16 +145,15 @@ class DefaultToolbarIntegration(
         tabsAction.updateCount(tabCount)
 
         toolbar.addBrowserAction(tabsAction)
+    }
 
-        val engineForSpeculativeConnects = if (!isPrivate) engine else null
-        ToolbarAutocompleteFeature(
-            toolbar,
-            engineForSpeculativeConnects
-        ).apply {
-            addDomainProvider(domainAutocompleteProvider)
-            if (context.settings().shouldShowHistorySuggestions) {
-                addHistoryStorageProvider(historyStorage)
-            }
-        }
+    override fun start() {
+        super.start()
+        cfrPresenter.start()
+    }
+
+    override fun stop() {
+        cfrPresenter.stop()
+        super.stop()
     }
 }

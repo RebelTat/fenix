@@ -25,6 +25,7 @@ import org.mozilla.fenix.GleanMetrics.TrackingProtection
 import org.mozilla.fenix.R
 import org.mozilla.fenix.databinding.ComponentTrackingProtectionPanelBinding
 import org.mozilla.fenix.ext.addUnderline
+import org.mozilla.fenix.ext.settings
 import org.mozilla.fenix.trackingprotection.TrackingProtectionCategory.CROSS_SITE_TRACKING_COOKIES
 import org.mozilla.fenix.trackingprotection.TrackingProtectionCategory.CRYPTOMINERS
 import org.mozilla.fenix.trackingprotection.TrackingProtectionCategory.FINGERPRINTERS
@@ -71,19 +72,19 @@ interface TrackingProtectionPanelViewInteractor {
 @SuppressWarnings("TooManyFunctions")
 class TrackingProtectionPanelView(
     val containerView: ViewGroup,
-    val interactor: TrackingProtectionPanelInteractor
+    val interactor: TrackingProtectionPanelInteractor,
 ) : View.OnClickListener {
 
     @VisibleForTesting
     internal val binding = ComponentTrackingProtectionPanelBinding.inflate(
         LayoutInflater.from(containerView.context),
         containerView,
-        true
+        true,
     )
 
     val view: ConstraintLayout = binding.panelWrapper
 
-    private var mode: TrackingProtectionState.Mode = TrackingProtectionState.Mode.Normal
+    private var mode: ProtectionsState.Mode = ProtectionsState.Mode.Normal
 
     private var bucketedTrackers = TrackerBuckets()
 
@@ -105,22 +106,25 @@ class TrackingProtectionPanelView(
         setCategoryClickListeners()
     }
 
-    fun update(state: TrackingProtectionState) {
+    /**
+     * Updates the display mode of the Protection view.
+     */
+    fun update(state: ProtectionsState) {
         mode = state.mode
         bucketedTrackers.updateIfNeeded(state.listTrackers)
 
         when (val mode = state.mode) {
-            is TrackingProtectionState.Mode.Normal -> setUIForNormalMode(state)
-            is TrackingProtectionState.Mode.Details -> setUIForDetailsMode(
+            is ProtectionsState.Mode.Normal -> setUIForNormalMode(state)
+            is ProtectionsState.Mode.Details -> setUIForDetailsMode(
                 mode.selectedCategory,
-                mode.categoryBlocked
+                mode.categoryBlocked,
             )
         }
 
         setAccessibilityViewHierarchy(binding.detailsBack, binding.categoryTitle)
     }
 
-    private fun setUIForNormalMode(state: TrackingProtectionState) {
+    private fun setUIForNormalMode(state: ProtectionsState) {
         binding.detailsMode.visibility = View.GONE
         binding.normalMode.visibility = View.VISIBLE
 
@@ -128,18 +132,32 @@ class TrackingProtectionPanelView(
         binding.notBlockingHeader.isGone = bucketedTrackers.loadedIsEmpty()
         binding.blockingHeader.isGone = bucketedTrackers.blockedIsEmpty()
 
+        if (containerView.context.settings().enabledTotalCookieProtection) {
+            binding.crossSiteTracking.text = containerView.context.getString(R.string.etp_cookies_title_2)
+            binding.crossSiteTrackingLoaded.text = containerView.context.getString(R.string.etp_cookies_title_2)
+        }
+
         updateCategoryVisibility()
         focusAccessibilityLastUsedCategory(state.lastAccessedCategory)
     }
 
     private fun setUIForDetailsMode(
         category: TrackingProtectionCategory,
-        categoryBlocked: Boolean
+        categoryBlocked: Boolean,
     ) {
         val containASmartBlockItem = bucketedTrackers.get(category, categoryBlocked).any { it.unBlockedBySmartBlock }
         binding.normalMode.visibility = View.GONE
         binding.detailsMode.visibility = View.VISIBLE
-        binding.categoryTitle.setText(category.title)
+
+        if (category == CROSS_SITE_TRACKING_COOKIES &&
+            containerView.context.settings().enabledTotalCookieProtection
+        ) {
+            binding.categoryTitle.setText(R.string.etp_cookies_title_2)
+            binding.categoryDescription.setText(R.string.etp_cookies_description_2)
+        } else {
+            binding.categoryTitle.setText(category.title)
+            binding.categoryDescription.setText(category.description)
+        }
 
         binding.smartblockDescription.isVisible = containASmartBlockItem
         binding.smartblockLearnMore.isVisible = containASmartBlockItem
@@ -158,13 +176,13 @@ class TrackingProtectionPanelView(
                 setOnClickListener { interactor.onLearnMoreClicked() }
             }
         }
-        binding.categoryDescription.setText(category.description)
+
         binding.detailsBlockingHeader.setText(
             if (categoryBlocked) {
                 R.string.enhanced_tracking_protection_blocked
             } else {
                 R.string.enhanced_tracking_protection_allowed
-            }
+            },
         )
 
         binding.detailsBack.requestFocus()
@@ -265,8 +283,8 @@ class TrackingProtectionPanelView(
 
     fun onBackPressed(): Boolean {
         return when (mode) {
-            is TrackingProtectionState.Mode.Details -> {
-                mode = TrackingProtectionState.Mode.Normal
+            is ProtectionsState.Mode.Details -> {
+                mode = ProtectionsState.Mode.Normal
                 interactor.onBackPressed()
                 true
             }
@@ -282,13 +300,13 @@ class TrackingProtectionPanelView(
             view2,
             object : AccessibilityDelegateCompat() {
                 override fun onInitializeAccessibilityNodeInfo(
-                    host: View?,
-                    info: AccessibilityNodeInfoCompat
+                    host: View,
+                    info: AccessibilityNodeInfoCompat,
                 ) {
                     info.setTraversalAfter(view1)
                     super.onInitializeAccessibilityNodeInfo(host, info)
                 }
-            }
+            },
         )
     }
 
@@ -316,14 +334,16 @@ class TrackingProtectionPanelView(
             R.id.fingerprinters_loaded,
             R.id.tracking_content_loaded,
             R.id.cryptominers_loaded,
-            R.id.redirect_trackers_loaded -> true
+            R.id.redirect_trackers_loaded,
+            -> true
 
             R.id.social_media_trackers,
             R.id.fingerprinters,
             R.id.cross_site_tracking,
             R.id.tracking_content,
             R.id.cryptominers,
-            R.id.redirect_trackers -> false
+            R.id.redirect_trackers,
+            -> false
             else -> false
         }
     }

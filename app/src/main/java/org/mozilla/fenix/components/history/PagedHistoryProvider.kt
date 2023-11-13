@@ -11,7 +11,6 @@ import mozilla.components.concept.storage.HistoryMetadataKey
 import mozilla.components.concept.storage.VisitInfo
 import mozilla.components.concept.storage.VisitType
 import mozilla.components.support.ktx.kotlin.tryGetHostFromUrl
-import org.mozilla.fenix.FeatureFlags
 import org.mozilla.fenix.library.history.History
 import org.mozilla.fenix.library.history.HistoryItemTimeGroup
 import org.mozilla.fenix.utils.Settings.Companion.SEARCH_GROUP_MINIMUM_SITES
@@ -35,7 +34,8 @@ sealed class HistoryDB {
         override val title: String,
         val url: String,
         override val visitedAt: Long,
-        override val selected: Boolean = false
+        override val selected: Boolean = false,
+        val isRemote: Boolean = false,
     ) : HistoryDB()
 
     data class Metadata(
@@ -44,14 +44,14 @@ sealed class HistoryDB {
         override val visitedAt: Long,
         val totalViewTime: Int,
         val historyMetadataKey: HistoryMetadataKey,
-        override val selected: Boolean = false
+        override val selected: Boolean = false,
     ) : HistoryDB()
 
     data class Group(
         override val title: String,
         override val visitedAt: Long,
         val items: List<Metadata>,
-        override val selected: Boolean = false
+        override val selected: Boolean = false,
     ) : HistoryDB()
 }
 
@@ -62,7 +62,7 @@ private fun HistoryMetadata.toHistoryDBMetadata(): HistoryDB.Metadata {
         url = key.url,
         visitedAt = createdAt,
         totalViewTime = totalViewTime,
-        historyMetadataKey = key
+        historyMetadataKey = key,
     )
 }
 
@@ -75,10 +75,9 @@ interface PagedHistoryProvider {
      *
      * @param offset How much to offset the list by
      * @param numberOfItems How many items to fetch
-     * @param isRemote Are items local or synced from other devices
      * @return list of [HistoryDB]
      */
-    suspend fun getHistory(offset: Int, numberOfItems: Int, isRemote: Boolean? = null): List<HistoryDB>
+    suspend fun getHistory(offset: Int, numberOfItems: Int): List<HistoryDB>
 }
 
 /**
@@ -86,7 +85,6 @@ interface PagedHistoryProvider {
  */
 class DefaultPagedHistoryProvider(
     private val historyStorage: PlacesHistoryStorage,
-    private val historyImprovementFeatures: Boolean = FeatureFlags.historyImprovementFeatures,
 ) : PagedHistoryProvider {
 
     /**
@@ -110,13 +108,11 @@ class DefaultPagedHistoryProvider(
         it == VisitType.REDIRECT_PERMANENT || it == VisitType.REDIRECT_TEMPORARY
     }
 
-    @Volatile
-    private var historyGroups: List<HistoryDB.Group>? = null
+    @Volatile private var historyGroups: List<HistoryDB.Group>? = null
 
     override suspend fun getHistory(
         offset: Int,
         numberOfItems: Int,
-        isRemote: Boolean?
     ): List<HistoryDB> {
         // We need to re-fetch all the history metadata if the offset resets back at 0
         // in the case of a pull to refresh.
@@ -130,20 +126,16 @@ class DefaultPagedHistoryProvider(
                     HistoryDB.Group(
                         title = searchTerm,
                         visitedAt = items.first().createdAt,
-                        items = items.map { it.toHistoryDBMetadata() }
+                        items = items.map { it.toHistoryDBMetadata() },
                     )
                 }
                 .filter {
-                    if (historyImprovementFeatures) {
-                        it.items.size >= SEARCH_GROUP_MINIMUM_SITES
-                    } else {
-                        true
-                    }
+                    it.items.size >= SEARCH_GROUP_MINIMUM_SITES
                 }
                 .toList()
         }
 
-        return getHistoryAndSearchGroups(offset, numberOfItems, isRemote)
+        return getHistoryAndSearchGroups(offset, numberOfItems)
     }
 
     /**
@@ -165,20 +157,14 @@ class DefaultPagedHistoryProvider(
     private suspend fun getHistoryAndSearchGroups(
         offset: Int,
         numberOfItems: Int,
-        isRemote: Boolean?
     ): List<HistoryDB> {
         val result = mutableListOf<HistoryDB>()
         var history: List<HistoryDB.Regular> = historyStorage
             .getVisitsPaginated(
                 offset.toLong(),
                 numberOfItems.toLong(),
-                excludeTypes = excludedVisitTypes
+                excludeTypes = excludedVisitTypes,
             )
-            .filter { item ->
-                isRemote?.let {
-                    item.isRemote == it
-                } ?: true
-            }
             .map { transformVisitInfoToHistoryItem(it) }
 
         // We'll use this list to filter out redirects from metadata groups below.
@@ -186,7 +172,7 @@ class DefaultPagedHistoryProvider(
             historyStorage.getDetailedVisits(
                 start = history.last().visitedAt,
                 end = history.first().visitedAt,
-                excludeTypes = notRedirectTypes
+                excludeTypes = notRedirectTypes,
             ).map { it.url }
         } else {
             // Edge-case this doesn't cover: if we only had redirects in the current page,
@@ -215,10 +201,7 @@ class DefaultPagedHistoryProvider(
             emptyList()
         }
         val historyMetadata = historyGroupsInOffset.flatMap { it.items }
-
-        if (historyImprovementFeatures) {
-            history = history.distinctBy { Pair(it.historyTimeGroup, it.url) }
-        }
+        history = history.distinctBy { Pair(it.historyTimeGroup, it.url) }
 
         // Add all history items that are not in a group filtering out any matches with a history
         // metadata item.
@@ -232,14 +215,10 @@ class DefaultPagedHistoryProvider(
         result.addAll(
             historyGroupsInOffset.map { group ->
                 group.copy(items = group.items.distinctBy { it.url }.filterNot { redirectsInThePage.contains(it.url) })
-            }
+            },
         )
 
-        return if (historyImprovementFeatures) {
-            result.sortedByDescending { it.visitedAt }
-        } else {
-            result.removeConsecutiveDuplicates().sortedByDescending { it.visitedAt }
-        }
+        return result.sortedByDescending { it.visitedAt }
     }
 
     private fun transformVisitInfoToHistoryItem(visit: VisitInfo): HistoryDB.Regular {
@@ -250,7 +229,8 @@ class DefaultPagedHistoryProvider(
         return HistoryDB.Regular(
             title = title,
             url = visit.url,
-            visitedAt = visit.visitTime
+            visitedAt = visit.visitTime,
+            isRemote = visit.isRemote,
         )
     }
 }

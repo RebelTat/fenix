@@ -10,27 +10,17 @@ import androidx.recyclerview.widget.ConcatAdapter
 import mozilla.components.browser.tabstray.TabViewHolder
 import org.mozilla.fenix.ext.components
 import org.mozilla.fenix.tabstray.ext.browserAdapter
-import org.mozilla.fenix.tabstray.ext.tabGroupAdapter
-import org.mozilla.fenix.tabstray.ext.titleHeaderAdapter
 
 class NormalBrowserTrayList @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
-    defStyleAttr: Int = 0
+    defStyleAttr: Int = 0,
 ) : AbstractBrowserTrayList(context, attrs, defStyleAttr) {
 
     private val concatAdapter by lazy { adapter as ConcatAdapter }
 
     private val normalTabsBinding by lazy {
         NormalTabsBinding(tabsTrayStore, context.components.core.store, concatAdapter.browserAdapter)
-    }
-
-    private val titleHeaderBinding by lazy {
-        OtherHeaderBinding(tabsTrayStore) { concatAdapter.titleHeaderAdapter.handleListChanges(it) }
-    }
-
-    private val tabGroupBinding by lazy {
-        TabGroupBinding(tabsTrayStore) { concatAdapter.tabGroupAdapter.submitList(it) }
     }
 
     private val touchHelper by lazy {
@@ -40,7 +30,7 @@ class NormalBrowserTrayList @JvmOverloads constructor(
                 it is TabViewHolder && swipeToDelete.isSwipeable
             },
             onViewHolderDraw = { context.components.settings.gridTabView.not() },
-            featureNameHolder = concatAdapter.browserAdapter
+            featureNameHolder = concatAdapter.browserAdapter,
         )
     }
 
@@ -48,8 +38,6 @@ class NormalBrowserTrayList @JvmOverloads constructor(
         super.onAttachedToWindow()
 
         normalTabsBinding.start()
-        titleHeaderBinding.start()
-        tabGroupBinding.start()
 
         touchHelper.attachToRecyclerView(this)
     }
@@ -58,8 +46,6 @@ class NormalBrowserTrayList @JvmOverloads constructor(
         super.onDetachedFromWindow()
 
         normalTabsBinding.stop()
-        titleHeaderBinding.stop()
-        tabGroupBinding.stop()
 
         touchHelper.attachToRecyclerView(null)
     }

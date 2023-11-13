@@ -19,7 +19,7 @@ internal const val FILE_NAME = "nimbus_messages_metadata.json"
  * A storage that persists [Message.Metadata] into disk.
  */
 class OnDiskMessageMetadataStorage(
-    private val context: Context
+    private val context: Context,
 ) : MessageMetadataStorage {
     private val diskCacheLock = Any()
 
@@ -81,7 +81,7 @@ internal fun JSONArray.toMetadataMap(): Map<String, Message.Metadata> {
 
 @Suppress("MaxLineLength") // To avoid adding any extra space to the string.
 internal fun Message.Metadata.toJson(): String {
-    return """{"id":"$id","displayCount":$displayCount,"pressed":$pressed,"dismissed":$dismissed,"lastTimeShown":$lastTimeShown}"""
+    return """{"id":"$id","displayCount":$displayCount,"pressed":$pressed,"dismissed":$dismissed,"lastTimeShown":$lastTimeShown,"latestBootIdentifier":"$latestBootIdentifier"}"""
 }
 
 internal fun JSONObject.toMetadata(): Message.Metadata {
@@ -90,6 +90,7 @@ internal fun JSONObject.toMetadata(): Message.Metadata {
         displayCount = optInt("displayCount"),
         pressed = optBoolean("pressed"),
         dismissed = optBoolean("dismissed"),
-        lastTimeShown = optLong("lastTimeShown")
+        lastTimeShown = optLong("lastTimeShown"),
+        latestBootIdentifier = optString("latestBootIdentifier"),
     )
 }

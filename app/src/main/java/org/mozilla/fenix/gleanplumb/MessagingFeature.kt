@@ -5,19 +5,17 @@
 package org.mozilla.fenix.gleanplumb
 
 import mozilla.components.support.base.feature.LifecycleAwareFeature
-import org.mozilla.fenix.FeatureFlags
 import org.mozilla.fenix.components.AppStore
 import org.mozilla.fenix.components.appstate.AppAction.MessagingAction
+import org.mozilla.fenix.nimbus.MessageSurfaceId
 
 /**
  * A message observer that updates the provided.
  */
-class MessagingFeature(val store: AppStore) : LifecycleAwareFeature {
+class MessagingFeature(val appStore: AppStore) : LifecycleAwareFeature {
 
     override fun start() {
-        if (FeatureFlags.messagingFeature) {
-            store.dispatch(MessagingAction.Evaluate)
-        }
+        appStore.dispatch(MessagingAction.Evaluate(MessageSurfaceId.HOMESCREEN))
     }
 
     override fun stop() = Unit

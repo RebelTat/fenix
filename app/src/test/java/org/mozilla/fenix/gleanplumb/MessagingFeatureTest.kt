@@ -12,6 +12,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.mozilla.fenix.components.AppStore
 import org.mozilla.fenix.components.appstate.AppAction.MessagingAction
+import org.mozilla.fenix.nimbus.MessageSurfaceId
 
 class MessagingFeatureTest {
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -20,11 +21,11 @@ class MessagingFeatureTest {
 
     @Test
     fun `WHEN start is called THEN evaluate messages`() {
-        val store: AppStore = spyk(AppStore())
-        val binding = MessagingFeature(store)
+        val appStore: AppStore = spyk(AppStore())
+        val binding = MessagingFeature(appStore)
 
         binding.start()
 
-        verify { store.dispatch(MessagingAction.Evaluate) }
+        verify { appStore.dispatch(MessagingAction.Evaluate(MessageSurfaceId.HOMESCREEN)) }
     }
 }

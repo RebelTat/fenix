@@ -5,6 +5,7 @@
 package org.mozilla.fenix.settings.logins.fragment
 
 import android.content.DialogInterface
+import android.os.Build
 import android.os.Bundle
 import android.text.InputType
 import android.view.LayoutInflater
@@ -13,8 +14,9 @@ import android.view.MenuInflater
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
-import androidx.annotation.StringRes
 import androidx.appcompat.app.AlertDialog
+import androidx.core.view.MenuProvider
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
@@ -47,7 +49,7 @@ import org.mozilla.fenix.settings.logins.view.LoginDetailsBindingDelegate
  * Displays saved login information for a single website.
  */
 @Suppress("TooManyFunctions", "ForbiddenComment")
-class LoginDetailFragment : SecureFragment(R.layout.fragment_login_detail) {
+class LoginDetailFragment : SecureFragment(R.layout.fragment_login_detail), MenuProvider {
 
     private val args by navArgs<LoginDetailFragmentArgs>()
     private var login: SavedLogin? = null
@@ -63,13 +65,13 @@ class LoginDetailFragment : SecureFragment(R.layout.fragment_login_detail) {
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
-        savedInstanceState: Bundle?
+        savedInstanceState: Bundle?,
     ): View? {
         val view = inflater.inflate(R.layout.fragment_login_detail, container, false)
         _binding = FragmentLoginDetailBinding.bind(view)
         savedLoginsStore = StoreProvider.get(this) {
             LoginsFragmentStore(
-                createInitialLoginsListState(requireContext().settings())
+                createInitialLoginsListState(requireContext().settings()),
             )
         }
         loginDetailsBindingDelegate = LoginDetailsBindingDelegate(binding)
@@ -79,15 +81,18 @@ class LoginDetailFragment : SecureFragment(R.layout.fragment_login_detail) {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        requireActivity().addMenuProvider(this, viewLifecycleOwner, Lifecycle.State.RESUMED)
 
         interactor = LoginDetailInteractor(
             SavedLoginsStorageController(
                 passwordsStorage = requireContext().components.core.passwordsStorage,
                 lifecycleScope = lifecycleScope,
                 navController = findNavController(),
-                loginsFragmentStore = savedLoginsStore
-            )
+                loginsFragmentStore = savedLoginsStore,
+                clipboardHandler = requireContext().components.clipboardHandler,
+            ),
         )
+
         interactor.onFetchLoginList(args.savedLoginId)
 
         consumeFrom(savedLoginsStore) {
@@ -96,16 +101,11 @@ class LoginDetailFragment : SecureFragment(R.layout.fragment_login_detail) {
             setUpCopyButtons()
             showToolbar(
                 savedLoginsStore.state.currentItem?.origin?.simplifiedUrl()
-                    ?: ""
+                    ?: "",
             )
             setUpPasswordReveal()
         }
         togglePasswordReveal(binding.passwordText, binding.revealPasswordButton)
-    }
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setHasOptionsMenu(true)
     }
 
     /**
@@ -119,7 +119,7 @@ class LoginDetailFragment : SecureFragment(R.layout.fragment_login_detail) {
         redirectToReAuth(
             listOf(R.id.editLoginFragment, R.id.savedLoginsFragment),
             findNavController().currentDestination?.id,
-            R.id.loginDetailFragment
+            R.id.loginDetailFragment,
         )
         super.onPause()
     }
@@ -147,22 +147,26 @@ class LoginDetailFragment : SecureFragment(R.layout.fragment_login_detail) {
         }
 
         binding.usernameText.text = login?.username
-        binding.copyUsername.setOnClickListener(
-            CopyButtonListener(login?.username, R.string.logins_username_copied)
-        )
+        binding.copyUsername.setOnClickListener {
+            interactor.onCopyUsername(args.savedLoginId)
+            showCopiedSnackbar(view = it, copiedItem = it.context.getString(R.string.logins_username_copied))
+            Logins.copyLogin.record(NoExtras())
+        }
 
         binding.passwordText.text = login?.password
-        binding.copyPassword.setOnClickListener(
-            CopyButtonListener(login?.password, R.string.logins_password_copied)
-        )
+        binding.copyPassword.setOnClickListener {
+            interactor.onCopyPassword(args.savedLoginId)
+            showCopiedSnackbar(view = it, copiedItem = it.context.getString(R.string.logins_password_copied))
+            Logins.copyLogin.record(NoExtras())
+        }
     }
 
-    override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
+    override fun onCreateMenu(menu: Menu, inflater: MenuInflater) {
         inflater.inflate(R.menu.login_options_menu, menu)
         this.menu = menu
     }
 
-    override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
+    override fun onMenuItemSelected(item: MenuItem): Boolean = when (item.itemId) {
         R.id.delete_login_button -> {
             displayDeleteLoginDialog()
             true
@@ -174,11 +178,22 @@ class LoginDetailFragment : SecureFragment(R.layout.fragment_login_detail) {
         else -> false
     }
 
+    private fun showCopiedSnackbar(view: View, copiedItem: String) {
+        // Only show a toast for Android 12 and lower.
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2) {
+            FenixSnackbar.make(
+                view,
+                duration = Snackbar.LENGTH_SHORT,
+                isDisplayedWithBrowserToolbar = false,
+            ).setText(copiedItem).show()
+        }
+    }
+
     private fun navigateToBrowser(address: String) {
         (activity as HomeActivity).openToBrowserAndLoad(
             address,
             newTab = true,
-            from = BrowserDirection.FromLoginDetailFragment
+            from = BrowserDirection.FromLoginDetailFragment,
         )
     }
 
@@ -186,7 +201,7 @@ class LoginDetailFragment : SecureFragment(R.layout.fragment_login_detail) {
         Logins.openLoginEditor.record(NoExtras())
         val directions =
             LoginDetailFragmentDirections.actionLoginDetailFragmentToEditLoginFragment(
-                login!!
+                login!!,
             )
         findNavController().navigate(directions)
     }
@@ -205,33 +220,6 @@ class LoginDetailFragment : SecureFragment(R.layout.fragment_login_detail) {
                 }
                 create()
             }.show()
-        }
-    }
-
-    /**
-     * Click listener for a textview's copy button.
-     * @param value Value to be copied
-     * @param snackbarText Text to display in snackbar after copying.
-     */
-    private inner class CopyButtonListener(
-        private val value: String?,
-        @StringRes private val snackbarText: Int
-    ) : View.OnClickListener {
-        override fun onClick(view: View) {
-            val clipboard = view.context.components.clipboardHandler
-            clipboard.text = value
-            showCopiedSnackbar(view.context.getString(snackbarText))
-            Logins.copyLogin.record(NoExtras())
-        }
-
-        private fun showCopiedSnackbar(copiedItem: String) {
-            view?.let {
-                FenixSnackbar.make(
-                    view = it,
-                    duration = Snackbar.LENGTH_SHORT,
-                    isDisplayedWithBrowserToolbar = false
-                ).setText(copiedItem).show()
-            }
         }
     }
 

@@ -20,12 +20,36 @@ def index_exists(index_path, reason=""):
         return False
 
 
-@_target_task("release")
-def target_tasks_default(full_task_graph, parameters, graph_config):
-
-    # TODO Use shipping-phase
+@_target_task("promote")
+def target_tasks_promote(full_task_graph, parameters, graph_config):
     def filter(task, parameters):
-        return task.attributes.get("release-type", "") == parameters["release_type"]
+        if (
+            task.attributes.get("release-type") == parameters["release_type"]
+            and task.attributes.get("shipping_phase") == "promote"
+        ):
+            return True
+
+    return [l for l, t in full_task_graph.tasks.items() if filter(t, parameters)]
+
+
+@_target_task("ship")
+def target_tasks_ship(full_task_graph, parameters, graph_config):
+    filtered_for_candidates = target_tasks_promote(
+        full_task_graph,
+        parameters,
+        graph_config,
+    )
+
+    def filter(task, parameters):
+        # Include promotion tasks; these will be optimized out
+        if task.label in filtered_for_candidates:
+            return True
+
+        if (
+            task.attributes.get("release-type") == parameters["release_type"]
+            and task.attributes.get("shipping_phase") == "ship"
+        ):
+            return True
 
     return [l for l, t in full_task_graph.tasks.items() if filter(t, parameters)]
 
@@ -53,6 +77,14 @@ def target_tasks_nightly(full_task_graph, parameters, graph_config):
     return [l for l, t in full_task_graph.tasks.items() if filter(t, parameters)]
 
 
+@_target_task("nightly-test")
+def target_tasks_nightly_test(full_task_graph, parameters, graph_config):
+    """Select the set of tasks required for a nightly build."""
+    def filter(task, parameters):
+        return task.attributes.get("nightly-test", False)
+    return [l for l, t in full_task_graph.tasks.items() if filter(t, parameters)]
+
+
 def _filter_fennec(fennec_type, task, parameters):
     return task.attributes.get("build-type", "") == "fennec-{}".format(fennec_type)
 
@@ -68,21 +100,20 @@ def target_tasks_fennec_nightly(full_task_graph, parameters, graph_config):
     ]
 
 
-@_target_task("bump_android_components")
-def target_tasks_bump_android_components(full_task_graph, parameters, graph_config):
-    """Select the set of tasks required to update android components."""
-
-    def filter(task, parameters):
-        return task.attributes.get("bump-type", "") == "android-components"
-
-    return [l for l, t in full_task_graph.tasks.items() if filter(t, parameters)]
-
-
 @_target_task("screenshots")
 def target_tasks_screnshots(full_task_graph, parameters, graph_config):
     """Select the set of tasks required to generate screenshots on a real device."""
 
     def filter(task, parameters):
         return task.attributes.get("screenshots", False)
+
+    return [l for l, t in full_task_graph.tasks.items() if filter(t, parameters)]
+
+@_target_task("legacy_api_ui_tests")
+def target_tasks_legacy_api_ui_tests(full_task_graph, parameters, graph_config):
+    """Select the set of tasks required to run select UI tests on other API."""
+
+    def filter(task, parameters):
+        return task.attributes.get("legacy", False)
 
     return [l for l, t in full_task_graph.tasks.items() if filter(t, parameters)]
