@@ -2,7 +2,7 @@ name: Android build PR
 on: [pull_request]
 jobs:
   run-build:
-    runs-on: ubuntu-20.04
+    runs-on: windows-latest
     if: ${{ false }}
     steps:
       - name: Checkout repository
@@ -20,7 +20,7 @@ jobs:
           arguments: clean app:assembleDebug
 
   run-testDebugUnitTest:
-    runs-on: ubuntu-20.04
+    runs-on:  windows-latest
     if: github.event.pull_request.head.repo.full_name != github.repository && github.actor != 'MickeyMoz'
 
     steps:
@@ -39,7 +39,7 @@ jobs:
           arguments: testDebugUnitTest
 
   run-detekt:
-    runs-on: ubuntu-20.04
+    runs-on:  windows-latest
     if: github.event.pull_request.head.repo.full_name != github.repository && github.actor != 'MickeyMoz'
 
     steps:
@@ -63,7 +63,7 @@ jobs:
           path: build/reports/detekt.html
 
   run-ktlint:
-    runs-on: ubuntu-20.04
+    runs-on:  windows-latest
     if: github.event.pull_request.head.repo.full_name != github.repository && github.actor != 'MickeyMoz'
 
     steps:
@@ -82,7 +82,7 @@ jobs:
           arguments: ktlint
 
   run-lintDebug:
-    runs-on: ubuntu-20.04
+    runs-on:  windows-latest
     if: github.event.pull_request.head.repo.full_name != github.repository && github.actor != 'MickeyMoz'
 
     steps:
